@@ -82,7 +82,6 @@ def run_tests(test_script):
 
 def get_commit_log(commit_hash_begin, commit_hash_end=0):
     """Get commit log for a range of commits"""
-    pretty_format = "--pretty=format:'%h - %an - %ad'"
     try:
         # Use subprocess to call Git command to get commit log
         if commit_hash_end != 0:
@@ -90,7 +89,6 @@ def get_commit_log(commit_hash_begin, commit_hash_end=0):
                 [
                     "git",
                     "log",
-                    pretty_format,
                     f"{commit_hash_begin}..{commit_hash_end}",
                 ],
                 stdout=subprocess.PIPE,
@@ -104,7 +102,6 @@ def get_commit_log(commit_hash_begin, commit_hash_end=0):
                     "git",
                     "log",
                     "-1",
-                    pretty_format,
                     f"{commit_hash_begin}",
                 ],
                 stdout=subprocess.PIPE,
@@ -122,7 +119,7 @@ def get_commit_log(commit_hash_begin, commit_hash_end=0):
 def on_test_begin(webhook_url, commit_hash):
     """Send begin message to webhook"""
     payload = {
-        "title": "黑锅侠，启动!",
+        "title": "黑锅侠，出击!",
         "content": f"最新提交:\n{get_commit_log(commit_hash)}",
     }
     send_webhook_message(webhook_url, payload)
@@ -154,7 +151,7 @@ def on_test_failure(webhook_url, commit_hash, last_test_pass_commit):
 def monitor_repo(args):
     """Monitor git repo for changes and run tests"""
     os.chdir(args.dir)
-    if not git_checkout_branch(args.branch):
+    if args.branch and not git_checkout_branch(args.branch):
         return False
 
     last_commit = 0

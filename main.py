@@ -28,7 +28,13 @@ import time
 import os
 import requests
 import json
+import logging
 from pprint import pprint
+
+# Configure basic logging
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 
 def send_webhook_message(webhook_url, payload):
@@ -38,10 +44,10 @@ def send_webhook_message(webhook_url, payload):
     try:
         response = requests.post(webhook_url, headers=headers, data=json.dumps(payload))
         response.raise_for_status()
-        print(f"Message: {payload} sent successfully")
+        logging.info(f"Message: {payload} sent successfully")
         return True
     except requests.exceptions.RequestException as e:
-        print(f"Failed to send message: {e}")
+        logging.error(f"Failed to send message: {e}")
         return False
 
 
@@ -51,8 +57,8 @@ def git_checkout_branch(branch_name):
         subprocess.run(["git", "checkout", branch_name], check=True)
         return True
     except subprocess.CalledProcessError as e:
-        print(f"Failed to checkout branch {branch_name}: {e}")
-        exit(1)
+        logging.error(f"Failed to checkout branch {branch_name}: {e}")
+        return False
 
 
 def get_latest_commit_hash():
@@ -63,7 +69,7 @@ def get_latest_commit_hash():
         )
         return result.stdout.strip()
     except subprocess.CalledProcessError as e:
-        print(f"Failed to get commit hash: {e}")
+        logging.error(f"Failed to get commit hash: {e}")
         return None
 
 
@@ -73,10 +79,10 @@ def run_tests(test_script):
         result = subprocess.run([test_script])
         return result.returncode
     except subprocess.CalledProcessError as e:
-        print(f"Tests failed: {e}")
+        logging.error(f"Tests failed: {e}")
         return 1
     except FileNotFoundError:
-        print(f"Test script not found: {test_script}")
+        logging.error(f"Test script not found: {test_script}")
         exit(1)
 
 
@@ -110,7 +116,7 @@ def get_commit_log(commit_hash_begin, commit_hash_end=0):
                 text=True,
             )
         commit_log = result.stdout.strip()
-        print(f"Commit log: {commit_log}")
+        logging.info(f"Commit log: {commit_log}")
     except subprocess.CalledProcessError as e:
         commit_log = f"Error fetching commit log for {commit_hash_begin}..{commit_hash_end}: {e.stderr.strip()}"
     return commit_log
@@ -162,11 +168,11 @@ def monitor_repo(args):
             try:
                 subprocess.run(args.sync_command, check=True, shell=True)
             except subprocess.CalledProcessError as e:
-                print(f"Failed to fetch updates: {e}")
+                logging.error(f"Failed to fetch updates: {e}")
 
         current_commit = get_latest_commit_hash()
         if current_commit != last_commit:
-            print(f"New commit detected: {current_commit}")
+            logging.info(f"New commit detected: {current_commit}")
             on_test_begin(args.url, current_commit)
 
             if run_tests(args.test_script) == 0:

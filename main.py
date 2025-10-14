@@ -61,6 +61,29 @@ def git_checkout_branch(branch_name):
         return False
 
 
+def get_branch_commit_hash(branch_name):
+    """Return the latest commit hash for a given branch name.
+
+    Tries several references (local branch, origin/branch, direct name) to be robust.
+    Returns None if the branch cannot be resolved.
+    """
+    candidates = [f"refs/heads/{branch_name}", f"origin/{branch_name}", branch_name]
+    for ref in candidates:
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "--verify", ref],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            return result.stdout.strip()
+        except subprocess.CalledProcessError:
+            continue
+    logging.error(f"Could not resolve branch '{branch_name}' to a commit hash")
+    return None
+
+
 def get_latest_commit_hash():
     """Get latest commit hash"""
     try:
@@ -155,13 +178,39 @@ def on_test_failure(webhook_url, commit_hash, last_test_pass_commit):
 
 
 def monitor_repo(args):
-    """Monitor git repo for changes and run tests"""
-    os.chdir(args.dir)
-    if args.branch and not git_checkout_branch(args.branch):
-        return False
+    """Monitor git repo for changes and run tests.
 
-    last_commit = 0
-    last_test_pass_commit = 0
+    Supports monitoring multiple branches (comma-separated via --branch).
+    For each branch we track the last seen commit and last commit that passed tests.
+    When a branch changes we checkout that branch, run tests, and send webhook messages
+    that include the branch name.
+    """
+    os.chdir(args.dir)
+
+    # Determine branches to monitor
+    if getattr(args, "branches", None):
+        branches = args.branches
+    elif args.branch:
+        branches = [b.strip() for b in args.branch.split(",") if b.strip()]
+    else:
+        # No branch specified: use current checked-out branch
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                check=True,
+                stdout=subprocess.PIPE,
+                text=True,
+            )
+            branches = [result.stdout.strip()]
+        except subprocess.CalledProcessError as e:
+            logging.error(f"Failed to determine current branch: {e}")
+            return False
+
+    logging.info(f"Monitoring branches: {branches}")
+
+    # Initialize per-branch trackers
+    last_commit = {b: None for b in branches}
+    last_test_pass_commit = {b: None for b in branches}
 
     while True:
         if args.sync_command:
@@ -170,18 +219,52 @@ def monitor_repo(args):
             except subprocess.CalledProcessError as e:
                 logging.error(f"Failed to fetch updates: {e}")
 
-        current_commit = get_latest_commit_hash()
-        if current_commit != last_commit:
-            logging.info(f"New commit detected: {current_commit}")
-            on_test_begin(args.url, current_commit)
+        for branch in branches:
+            commit = get_branch_commit_hash(branch)
+            if not commit:
+                # branch can't be resolved; skip
+                continue
 
-            if run_tests(args.test_script) == 0:
-                on_test_success(args.url, current_commit)
-                last_test_pass_commit = current_commit
-            else:
-                on_test_failure(args.url, current_commit, last_test_pass_commit)
+            if commit != last_commit.get(branch):
+                logging.info(f"New commit detected on {branch}: {commit}")
+                # inform begin (include branch)
+                payload = {
+                    "title": "黑锅侠，出击!",
+                    "content": f"分支: {branch}\n最新提交:\n{get_commit_log(commit)}",
+                }
+                send_webhook_message(args.url, payload)
 
-            last_commit = current_commit
+                # Checkout the target branch before running tests
+                if not git_checkout_branch(branch):
+                    logging.error(
+                        f"Skipping tests for {branch} because checkout failed"
+                    )
+                    last_commit[branch] = commit
+                    continue
+
+                # Run tests for this branch
+                if run_tests(args.test_script) == 0:
+                    payload = {
+                        "title": "叮铃铃~ 测试通过!",
+                        "content": f"分支: {branch}\n最新提交:\n{get_commit_log(commit)}",
+                    }
+                    send_webhook_message(args.url, payload)
+                    last_test_pass_commit[branch] = commit
+                else:
+                    # If we have a last passing commit for this branch, include the range
+                    if last_test_pass_commit.get(branch):
+                        commit_log = get_commit_log(
+                            last_test_pass_commit[branch], commit
+                        )
+                    else:
+                        commit_log = get_commit_log(commit)
+                    payload = {
+                        "title": "铛铛铛! 测试失败!",
+                        "content": f"分支: {branch}\n怀疑对象:\n{commit_log}",
+                    }
+                    send_webhook_message(args.url, payload)
+
+                last_commit[branch] = commit
 
         time.sleep(args.interval_minutes * 60 + args.interval_hours * 60 * 60)
 
@@ -205,7 +288,7 @@ def main():
     parser.add_argument(
         "--branch",
         "-b",
-        help="Git branch to monitor",
+        help="Git branch to monitor, e.g. 'main' or 'dev'. For multiple branches, use comma-separated values like 'main,dev'. If not specified, the current branch is used.",
     )
     parser.add_argument(
         "--test-script",

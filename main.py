@@ -213,58 +213,42 @@ def monitor_repo(args):
     last_test_pass_commit = {b: None for b in branches}
 
     while True:
-        if args.sync_command:
-            try:
-                subprocess.run(args.sync_command, check=True, shell=True)
-            except subprocess.CalledProcessError as e:
-                logging.error(f"Failed to fetch updates: {e}")
-
         for branch in branches:
-            commit = get_branch_commit_hash(branch)
-            if not commit:
-                # branch can't be resolved; skip
+            # Checkout the branch first
+            if not git_checkout_branch(branch):
+                logging.error(f"Skipping tests for {branch} because checkout failed")
                 continue
 
-            if commit != last_commit.get(branch):
-                logging.info(f"New commit detected on {branch}: {commit}")
-                # inform begin (include branch)
-                payload = {
-                    "title": "黑锅侠，出击!",
-                    "content": f"分支: {branch}\n最新提交:\n{get_commit_log(commit)}",
-                }
-                send_webhook_message(args.url, payload)
-
-                # Checkout the target branch before running tests
-                if not git_checkout_branch(branch):
-                    logging.error(
-                        f"Skipping tests for {branch} because checkout failed"
-                    )
-                    last_commit[branch] = commit
+            # Sync updates from remote if command provided
+            if args.sync_command:
+                try:
+                    subprocess.run(args.sync_command, check=True, shell=True)
+                except subprocess.CalledProcessError as e:
+                    logging.error(f"Failed to fetch updates: {e}")
                     continue
 
-                # Run tests for this branch
-                if run_tests(args.test_script) == 0:
-                    payload = {
-                        "title": "叮铃铃~ 测试通过!",
-                        "content": f"分支: {branch}\n最新提交:\n{get_commit_log(commit)}",
-                    }
-                    send_webhook_message(args.url, payload)
-                    last_test_pass_commit[branch] = commit
-                else:
-                    # If we have a last passing commit for this branch, include the range
-                    if last_test_pass_commit.get(branch):
-                        commit_log = get_commit_log(
-                            last_test_pass_commit[branch], commit
-                        )
-                    else:
-                        commit_log = get_commit_log(commit)
-                    payload = {
-                        "title": "铛铛铛! 测试失败!",
-                        "content": f"分支: {branch}\n怀疑对象:\n{commit_log}",
-                    }
-                    send_webhook_message(args.url, payload)
+            # Get current commit hash for this branch
+            current_commit = get_branch_commit_hash(branch)
+            if not current_commit:
+                logging.error(
+                    f"Skipping tests for {branch} because branch can't be resolved"
+                )
+                continue
 
-                last_commit[branch] = commit
+            # Check for new commits
+            if current_commit != last_commit.get(branch):
+                logging.info(f"New commit detected: {current_commit}")
+                on_test_begin(args.url, current_commit)
+
+                if run_tests(args.test_script) == 0:
+                    on_test_success(args.url, current_commit)
+                    last_test_pass_commit[branch] = current_commit
+                else:
+                    on_test_failure(
+                        args.url, current_commit, last_test_pass_commit[branch]
+                    )
+
+                last_commit[branch] = current_commit
 
         time.sleep(args.interval_minutes * 60 + args.interval_hours * 60 * 60)
 

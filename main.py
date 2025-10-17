@@ -145,25 +145,25 @@ def get_commit_log(commit_hash_begin, commit_hash_end=0):
     return commit_log
 
 
-def on_test_begin(webhook_url, commit_hash):
+def on_test_begin(webhook_url, branch, commit_hash):
     """Send begin message to webhook"""
     payload = {
         "title": "黑锅侠，出击!",
-        "content": f"最新提交:\n{get_commit_log(commit_hash)}",
+        "content": f"分支: {branch}\n最新提交:\n{get_commit_log(commit_hash)}",
     }
     send_webhook_message(webhook_url, payload)
 
 
-def on_test_success(webhook_url, commit_hash):
+def on_test_success(webhook_url, branch, commit_hash):
     """Send success message to webhook"""
     payload = {
         "title": "叮铃铃~ 测试通过!",
-        "content": f"最新提交:\n{get_commit_log(commit_hash)}",
+        "content": f"分支: {branch}\n最新提交:\n{get_commit_log(commit_hash)}",
     }
     send_webhook_message(webhook_url, payload)
 
 
-def on_test_failure(webhook_url, commit_hash, last_test_pass_commit):
+def on_test_failure(webhook_url, branch, commit_hash, last_test_pass_commit):
     """Send failure message to webhook"""
 
     commit_log = get_commit_log(commit_hash)
@@ -172,7 +172,7 @@ def on_test_failure(webhook_url, commit_hash, last_test_pass_commit):
 
     payload = {
         "title": "铛铛铛! 测试失败!",
-        "content": f"怀疑对象:\n{commit_log}",
+        "content": f"分支: {branch}\n怀疑对象:\n{commit_log}",
     }
     send_webhook_message(webhook_url, payload)
 
@@ -238,14 +238,14 @@ def monitor_repo(args):
             # Check for new commits
             if current_commit != last_commit.get(branch):
                 logging.info(f"New commit detected: {current_commit}")
-                on_test_begin(args.url, current_commit)
+                on_test_begin(args.url, branch, current_commit)
 
                 if run_tests(args.test_script) == 0:
-                    on_test_success(args.url, current_commit)
+                    on_test_success(args.url, branch, current_commit)
                     last_test_pass_commit[branch] = current_commit
                 else:
                     on_test_failure(
-                        args.url, current_commit, last_test_pass_commit[branch]
+                        args.url, branch, current_commit, last_test_pass_commit[branch]
                     )
 
                 last_commit[branch] = current_commit

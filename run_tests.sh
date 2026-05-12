@@ -5,7 +5,7 @@
 
 set -e
 
-MIN_COVERAGE=80
+MIN_COVERAGE=85
 COV_ARGS="--cov=src --cov-report=term-missing --cov-fail-under=$MIN_COVERAGE"
 
 if [[ "$1" == "--html" ]]; then

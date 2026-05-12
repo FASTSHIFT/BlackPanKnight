@@ -7,7 +7,12 @@ from typing import Optional
 from src.ai.client import LLMClient
 from src.config import AppConfig
 from src.modes import test_mode, watch_mode
-from src.repo import get_branch_head, get_commits_between, sync_repo
+from src.repo import (
+    get_branch_head,
+    get_commits_between,
+    get_recent_commits,
+    sync_repo,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -108,3 +113,43 @@ class Scheduler:
             interval = self.config.global_config.poll_interval_minutes
             logger.info(f"Sleeping {interval} minutes...")
             time.sleep(interval * 60)
+
+    def run_head(self, n: int = 1):
+        """Analyze the latest N commits on each branch (no state tracking)."""
+        logger.info(f"Analyzing HEAD (latest {n} commits per branch)...")
+        for repo_config in self.config.repos:
+            # Apply global fallbacks
+            if not repo_config.webhook_url:
+                repo_config.webhook_url = self.config.global_config.webhook_url
+            if not repo_config.sync_command:
+                repo_config.sync_command = self.config.global_config.sync_command
+            if not repo_config.ai_prompt:
+                repo_config.ai_prompt = self.config.global_config.ai_prompt
+
+            if not sync_repo(repo_config.path, repo_config.sync_command):
+                continue
+
+            for branch in repo_config.branches:
+                head = get_branch_head(repo_config.path, branch)
+                if not head:
+                    logger.warning(
+                        f"[{repo_config.name}] Cannot resolve branch {branch}"
+                    )
+                    continue
+
+                commits = get_recent_commits(repo_config.path, head, n)
+                logger.info(
+                    f"[{repo_config.name}/{branch}] Analyzing {len(commits)} commit(s)"
+                )
+
+                for commit in commits:
+                    if repo_config.mode == "test":
+                        test_mode.process_commit(repo_config, commit, branch)
+                    elif repo_config.mode == "watch":
+                        watch_mode.process_commit(
+                            repo_config,
+                            self.config.global_config,
+                            commit,
+                            branch,
+                            self.llm_client,
+                        )

@@ -116,3 +116,23 @@ def test_get_commits_between(git_repo):
     commits = get_commits_between(git_repo, hashes[0], hashes[1])
     assert len(commits) >= 1
     assert commits[0].message == "update file"
+
+
+def test_get_recent_commits(git_repo):
+    from src.repo import get_recent_commits
+
+    head = run_git(["rev-parse", "HEAD"], cwd=git_repo)
+    commits = get_recent_commits(git_repo, head, n=2)
+    assert len(commits) == 2
+    assert commits[0].message == "update file"
+    assert commits[1].message == "initial commit"
+
+
+def test_get_recent_commits_single(git_repo):
+    from src.repo import get_recent_commits
+
+    head = run_git(["rev-parse", "HEAD"], cwd=git_repo)
+    commits = get_recent_commits(git_repo, head, n=1)
+    assert len(commits) == 1
+    assert commits[0].hash == head
+    assert commits[0].files_changed == ["file.txt"]

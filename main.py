@@ -213,6 +213,14 @@ def main():
     parser.add_argument("--repo", "-r", help="只运行指定名称的仓库（用于调试）")
     parser.add_argument("--once", action="store_true", help="只运行一次轮询（不循环）")
     parser.add_argument(
+        "--analyze-head",
+        type=int,
+        nargs="?",
+        const=1,
+        metavar="N",
+        help="分析每个分支最新 N 个提交 (默认 1)",
+    )
+    parser.add_argument(
         "--test-webhook", action="store_true", help="发送测试消息到 webhook"
     )
     parser.add_argument("--test-llm", action="store_true", help="测试 LLM API 连通性")
@@ -247,7 +255,9 @@ def main():
 
     scheduler = Scheduler(config)
 
-    if args.once:
+    if args.analyze_head:
+        scheduler.run_head(n=args.analyze_head)
+    elif args.once:
         scheduler.run_once()
     else:
         scheduler.run_forever()

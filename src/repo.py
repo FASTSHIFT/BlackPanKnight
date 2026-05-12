@@ -127,3 +127,49 @@ def get_single_commit(path: str, commit_hash: str) -> Optional[CommitInfo]:
         date=lines[3],
         files_changed=[f for f in lines[4:] if f.strip()],
     )
+
+
+def get_recent_commits(path: str, head_hash: str, n: int = 1) -> list:
+    """Get the latest N commits starting from head_hash."""
+    fmt = "%H%x00%an%x00%s%x00%ai"
+    log_output = run_git(
+        ["log", f"-{n}", f"--format={fmt}", "--name-only", head_hash],
+        cwd=path,
+    )
+    if not log_output:
+        return []
+
+    commits = []
+    current_meta = None
+    current_files = []
+
+    for line in log_output.strip().split("\n"):
+        if "\x00" in line:
+            # This is a commit header line - save previous commit first
+            if current_meta:
+                commits.append(
+                    CommitInfo(
+                        hash=current_meta[0],
+                        author=current_meta[1],
+                        message=current_meta[2],
+                        date=current_meta[3],
+                        files_changed=current_files,
+                    )
+                )
+            current_meta = line.split("\x00")
+            current_files = []
+        elif line.strip():
+            current_files.append(line.strip())
+
+    # Don't forget the last commit
+    if current_meta:
+        commits.append(
+            CommitInfo(
+                hash=current_meta[0],
+                author=current_meta[1],
+                message=current_meta[2],
+                date=current_meta[3],
+                files_changed=current_files,
+            )
+        )
+    return commits

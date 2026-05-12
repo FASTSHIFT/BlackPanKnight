@@ -151,3 +151,73 @@ repos:
             load_config(path)
     finally:
         os.unlink(path)
+
+
+def test_global_ai_prompt():
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+        f.write("""
+global:
+  ai_prompt: "Custom prompt here"
+repos:
+  - name: "R"
+    path: "/tmp"
+    branches: ["main"]
+    mode: watch
+    watch_paths: ["src/"]
+    webhook_url: "http://x"
+""")
+        f.flush()
+        path = f.name
+    try:
+        config = load_config(path)
+        assert config.global_config.ai_prompt == "Custom prompt here"
+    finally:
+        os.unlink(path)
+
+
+def test_repo_ai_prompt_override():
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+        f.write("""
+global:
+  ai_prompt: "Global prompt"
+repos:
+  - name: "R"
+    path: "/tmp"
+    branches: ["main"]
+    mode: watch
+    watch_paths: ["src/"]
+    webhook_url: "http://x"
+    ai_prompt: "Repo specific prompt"
+""")
+        f.flush()
+        path = f.name
+    try:
+        config = load_config(path)
+        assert config.global_config.ai_prompt == "Global prompt"
+        assert config.repos[0].ai_prompt == "Repo specific prompt"
+    finally:
+        os.unlink(path)
+
+
+def test_global_webhook_and_sync():
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+        f.write("""
+global:
+  webhook_url: "http://global-hook"
+  sync_command: "git fetch origin"
+repos:
+  - name: "R"
+    path: "/tmp"
+    branches: ["main"]
+    mode: watch
+    watch_paths: ["src/"]
+""")
+        f.flush()
+        path = f.name
+    try:
+        config = load_config(path)
+        assert config.global_config.webhook_url == "http://global-hook"
+        assert config.global_config.sync_command == "git fetch origin"
+        assert config.repos[0].webhook_url == ""  # not set at repo level
+    finally:
+        os.unlink(path)

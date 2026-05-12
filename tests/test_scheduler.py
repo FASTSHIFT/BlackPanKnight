@@ -150,3 +150,61 @@ def test_run_once_branch_unresolvable(mock_head, mock_sync, watch_config):
     scheduler.run_once()
 
     assert ("Test Watch", "main") not in scheduler._last_commit
+
+
+@patch("src.scheduler.watch_mode.process_commit")
+@patch("src.scheduler.get_recent_commits")
+@patch("src.scheduler.get_branch_head")
+@patch("src.scheduler.sync_repo")
+def test_run_head_watch(mock_sync, mock_head, mock_recent, mock_process, watch_config):
+    mock_sync.return_value = True
+    mock_head.return_value = "abc12345"
+    mock_recent.return_value = [
+        MagicMock(hash="abc12345", author="dev", message="fix perf")
+    ]
+    mock_process.return_value = True
+
+    scheduler = Scheduler(watch_config)
+    scheduler.run_head(n=1)
+
+    mock_recent.assert_called_once_with("/tmp/fake", "abc12345", 1)
+    mock_process.assert_called_once()
+
+
+@patch("src.scheduler.test_mode.process_commit")
+@patch("src.scheduler.get_recent_commits")
+@patch("src.scheduler.get_branch_head")
+@patch("src.scheduler.sync_repo")
+def test_run_head_test(mock_sync, mock_head, mock_recent, mock_process, test_config):
+    mock_sync.return_value = True
+    mock_head.return_value = "def67890"
+    mock_recent.return_value = [
+        MagicMock(hash="def67890", author="dev", message="add test")
+    ]
+    mock_process.return_value = True
+
+    scheduler = Scheduler(test_config)
+    scheduler.run_head(n=1)
+
+    mock_recent.assert_called_once_with("/tmp/fake", "def67890", 1)
+    mock_process.assert_called_once()
+
+
+@patch("src.scheduler.get_branch_head")
+@patch("src.scheduler.sync_repo")
+def test_run_head_branch_not_found(mock_sync, mock_head, watch_config):
+    mock_sync.return_value = True
+    mock_head.return_value = None
+
+    scheduler = Scheduler(watch_config)
+    scheduler.run_head(n=1)
+    # Should not crash, just skip
+
+
+@patch("src.scheduler.sync_repo")
+def test_run_head_sync_failure(mock_sync, watch_config):
+    mock_sync.return_value = False
+
+    scheduler = Scheduler(watch_config)
+    scheduler.run_head(n=1)
+    # Should not crash, just skip

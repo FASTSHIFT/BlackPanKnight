@@ -71,7 +71,11 @@ class LLMClient:
             return None
 
     def _build_prompt(
-        self, commit_hash: str, author: str, message: str, diff: str,
+        self,
+        commit_hash: str,
+        author: str,
+        message: str,
+        diff: str,
         prompt_template: str = "",
     ) -> str:
         template = prompt_template or DEFAULT_PROMPT

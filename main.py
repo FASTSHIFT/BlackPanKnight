@@ -59,7 +59,9 @@ def test_llm(config):
     print(f"🤖 测试 LLM: {gc.llm_model}")
     print(f"   Base URL: {gc.llm_base_url}")
 
-    client = LLMClient(base_url=gc.llm_base_url, api_key=gc.llm_api_key, model=gc.llm_model)
+    client = LLMClient(
+        base_url=gc.llm_base_url, api_key=gc.llm_api_key, model=gc.llm_model
+    )
 
     sample_diff = """--- a/include/spinlock.h
 +++ b/include/spinlock.h
@@ -82,7 +84,7 @@ def test_llm(config):
     )
 
     if result:
-        print(f"✅ LLM 测试成功！")
+        print("✅ LLM 测试成功！")
         print(f"   风险等级: {result.risk_level}")
         print(f"   分析摘要: {result.summary}")
         return 0
@@ -108,15 +110,15 @@ def test_repos(config):
             print(f"   ❌ 路径不存在: {repo.path}")
             errors += 1
             continue
-        print(f"   ✅ 路径存在")
+        print("   ✅ 路径存在")
 
         # 2. Check it's a git repo
         git_dir = os.path.join(repo.path, ".git")
         if not os.path.exists(git_dir):
-            print(f"   ❌ 不是 git 仓库 (无 .git)")
+            print("   ❌ 不是 git 仓库 (无 .git)")
             errors += 1
             continue
-        print(f"   ✅ Git 仓库")
+        print("   ✅ Git 仓库")
 
         # 3. Test sync
         sync_cmd = repo.sync_command or gc.sync_command
@@ -138,7 +140,7 @@ def test_repos(config):
 
         # 5. Check watch_paths have recent matches (for watch mode)
         if repo.mode == "watch" and repo.watch_paths:
-            from src.repo import get_single_commit, run_git
+            from src.repo import get_single_commit
 
             head = get_branch_head(repo.path, repo.branches[0])
             if head:
@@ -150,10 +152,12 @@ def test_repos(config):
                     if matched:
                         print(f"   ✅ 最新提交命中 watch_paths: {matched[:3]}")
                     else:
-                        print(f"   ⚠️  最新提交未命中 watch_paths (正常，不是每次都命中)")
+                        print(
+                            "   ⚠️  最新提交未命中 watch_paths (正常，不是每次都命中)"
+                        )
 
     if errors == 0:
-        print(f"\n🎉 所有仓库检查通过！")
+        print("\n🎉 所有仓库检查通过！")
     else:
         print(f"\n⚠️  {errors} 个问题需要修复")
     return 1 if errors else 0
@@ -211,9 +215,7 @@ def main():
     parser.add_argument(
         "--test-webhook", action="store_true", help="发送测试消息到 webhook"
     )
-    parser.add_argument(
-        "--test-llm", action="store_true", help="测试 LLM API 连通性"
-    )
+    parser.add_argument("--test-llm", action="store_true", help="测试 LLM API 连通性")
     parser.add_argument(
         "--test-repos", action="store_true", help="测试仓库路径、分支、sync"
     )

@@ -16,44 +16,7 @@ class AnalysisResult:
     detail: str
 
 
-class LLMClient:
-    def __init__(self, base_url: str, api_key: str, model: str):
-        self.client = OpenAI(base_url=base_url, api_key=api_key)
-        self.model = model
-
-    def analyze_diff(
-        self,
-        commit_hash: str,
-        author: str,
-        message: str,
-        diff_content: str,
-    ) -> Optional[AnalysisResult]:
-        """Analyze a commit diff for performance risks."""
-        if not diff_content.strip():
-            return None
-
-        # Truncate very large diffs to avoid token limits
-        max_diff_chars = 12000
-        if len(diff_content) > max_diff_chars:
-            diff_content = diff_content[:max_diff_chars] + "\n... (truncated)"
-
-        prompt = self._build_prompt(commit_hash, author, message, diff_content)
-
-        try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.2,
-            )
-            return self._parse_response(response.choices[0].message.content)
-        except Exception as e:
-            logger.error(f"LLM analysis failed: {e}")
-            return None
-
-    def _build_prompt(
-        self, commit_hash: str, author: str, message: str, diff: str
-    ) -> str:
-        return f"""你是一个嵌入式系统性能分析专家。请分析以下 Git commit 的代码变更，
+DEFAULT_PROMPT = """你是一个嵌入式系统性能分析专家。请分析以下 Git commit 的代码变更，
 重点关注对系统性能的潜在影响。
 
 关注维度：
@@ -67,7 +30,52 @@ class LLMClient:
 请严格按以下格式输出（不要添加额外内容）：
 风险等级：🔴 高风险 / 🟡 中风险 / 🟢 低风险（三选一）
 分析摘要：一段话概括主要风险点（100字以内）
-详细分析：逐文件分析变更影响
+详细分析：逐文件分析变更影响"""
+
+
+class LLMClient:
+    def __init__(self, base_url: str, api_key: str, model: str):
+        self.client = OpenAI(base_url=base_url, api_key=api_key)
+        self.model = model
+
+    def analyze_diff(
+        self,
+        commit_hash: str,
+        author: str,
+        message: str,
+        diff_content: str,
+        prompt_template: str = "",
+    ) -> Optional[AnalysisResult]:
+        """Analyze a commit diff for performance risks."""
+        if not diff_content.strip():
+            return None
+
+        # Truncate very large diffs to avoid token limits
+        max_diff_chars = 12000
+        if len(diff_content) > max_diff_chars:
+            diff_content = diff_content[:max_diff_chars] + "\n... (truncated)"
+
+        prompt = self._build_prompt(
+            commit_hash, author, message, diff_content, prompt_template
+        )
+
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.2,
+            )
+            return self._parse_response(response.choices[0].message.content)
+        except Exception as e:
+            logger.error(f"LLM analysis failed: {e}")
+            return None
+
+    def _build_prompt(
+        self, commit_hash: str, author: str, message: str, diff: str,
+        prompt_template: str = "",
+    ) -> str:
+        template = prompt_template or DEFAULT_PROMPT
+        return f"""{template}
 
 ---
 Commit: {commit_hash}

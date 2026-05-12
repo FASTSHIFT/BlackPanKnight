@@ -47,6 +47,8 @@ class Scheduler:
             repo_config.webhook_url = self.config.global_config.webhook_url
         if not repo_config.sync_command:
             repo_config.sync_command = self.config.global_config.sync_command
+        if not repo_config.ai_prompt:
+            repo_config.ai_prompt = self.config.global_config.ai_prompt
 
         key = (repo_config.name, branch)
         current_hash = get_branch_head(repo_config.path, branch)

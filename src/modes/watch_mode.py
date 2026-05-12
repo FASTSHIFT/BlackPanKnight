@@ -60,11 +60,13 @@ def process_commit(
     risk_level = ""
     ai_summary = ""
     if repo_config.ai_analysis and llm_client and diff_content:
+        prompt_template = repo_config.ai_prompt or global_config.ai_prompt
         result: Optional[AnalysisResult] = llm_client.analyze_diff(
             commit_hash=commit.hash,
             author=commit.author,
             message=commit.message,
             diff_content=diff_content,
+            prompt_template=prompt_template,
         )
         if result:
             risk_level = result.risk_level

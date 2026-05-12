@@ -15,6 +15,7 @@ class GlobalConfig:
     poll_interval_minutes: int = 30
     webhook_url: str = ""
     sync_command: str = ""
+    ai_prompt: str = ""
 
 
 @dataclass
@@ -28,6 +29,7 @@ class RepoConfig:
     webhook_url: str = ""
     watch_paths: list = field(default_factory=list)
     ai_analysis: bool = True
+    ai_prompt: str = ""
     poll_interval_minutes: Optional[int] = None
 
 
@@ -59,6 +61,7 @@ def load_config(config_path: str) -> AppConfig:
         poll_interval_minutes=global_raw.get("poll_interval_minutes", 30),
         webhook_url=global_raw.get("webhook_url", ""),
         sync_command=global_raw.get("sync_command", ""),
+        ai_prompt=global_raw.get("ai_prompt", ""),
     )
 
     # Parse repos
@@ -73,6 +76,7 @@ def load_config(config_path: str) -> AppConfig:
             webhook_url=repo_raw.get("webhook_url", ""),
             watch_paths=repo_raw.get("watch_paths", []),
             ai_analysis=repo_raw.get("ai_analysis", True),
+            ai_prompt=repo_raw.get("ai_prompt", ""),
             poll_interval_minutes=repo_raw.get("poll_interval_minutes"),
         )
         _validate_repo(repo)

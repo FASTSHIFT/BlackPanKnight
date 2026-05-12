@@ -42,6 +42,12 @@ class Scheduler:
 
     def _check_branch(self, repo_config, branch: str):
         """Check a single branch for new commits."""
+        # Fallback webhook_url and sync_command from global config
+        if not repo_config.webhook_url:
+            repo_config.webhook_url = self.config.global_config.webhook_url
+        if not repo_config.sync_command:
+            repo_config.sync_command = self.config.global_config.sync_command
+
         key = (repo_config.name, branch)
         current_hash = get_branch_head(repo_config.path, branch)
         if not current_hash:

@@ -54,8 +54,18 @@ def sync_repo(path: str, sync_command: str) -> bool:
 
 
 def get_branch_head(path: str, branch: str) -> Optional[str]:
-    """Get the latest commit hash for a branch."""
-    for ref in [f"origin/{branch}", branch, f"refs/heads/{branch}"]:
+    """Get the latest commit hash for a branch.
+
+    Tries multiple remote prefixes to handle repos with non-origin remotes.
+    """
+    # Get all remotes for this repo
+    remotes_output = run_git(["remote"], cwd=path)
+    remotes = remotes_output.split("\n") if remotes_output else ["origin"]
+
+    candidates = [f"{r}/{branch}" for r in remotes]
+    candidates.extend([branch, f"refs/heads/{branch}"])
+
+    for ref in candidates:
         result = run_git(["rev-parse", "--verify", ref], cwd=path)
         if result:
             return result

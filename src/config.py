@@ -13,6 +13,8 @@ class GlobalConfig:
     llm_api_key: str = ""
     llm_model: str = "gpt-4o"
     poll_interval_minutes: int = 30
+    webhook_url: str = ""
+    sync_command: str = ""
 
 
 @dataclass
@@ -55,6 +57,8 @@ def load_config(config_path: str) -> AppConfig:
         llm_api_key=global_raw.get("llm_api_key", ""),
         llm_model=global_raw.get("llm_model", "gpt-4o"),
         poll_interval_minutes=global_raw.get("poll_interval_minutes", 30),
+        webhook_url=global_raw.get("webhook_url", ""),
+        sync_command=global_raw.get("sync_command", ""),
     )
 
     # Parse repos

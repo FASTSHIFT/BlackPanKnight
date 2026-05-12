@@ -74,26 +74,34 @@ def get_branch_head(path: str, branch: str) -> Optional[str]:
 
 def get_commits_between(path: str, old_hash: str, new_hash: str) -> list:
     """Get list of CommitInfo between two commits (exclusive old, inclusive new)."""
-    fmt = "%H%n%an%n%s%n%ai"
     log_output = run_git(
-        ["log", f"{old_hash}..{new_hash}", f"--format={fmt}", "--name-only"],
+        [
+            "log",
+            f"{old_hash}..{new_hash}",
+            "--format=COMMIT_SEP%n%H%n%an%n%s%n%ai",
+            "--name-only",
+        ],
         cwd=path,
     )
     if not log_output:
         return []
 
     commits = []
-    entries = log_output.split("\n\n")
-    for entry in entries:
-        lines = entry.strip().split("\n")
+    for entry in log_output.split("COMMIT_SEP\n"):
+        entry = entry.strip()
+        if not entry:
+            continue
+        lines = entry.split("\n")
         if len(lines) < 4:
             continue
+        # Lines: hash, author, message, date, blank, file1, file2, ...
+        files = [f for f in lines[4:] if f.strip()]
         commit = CommitInfo(
             hash=lines[0],
             author=lines[1],
             message=lines[2],
             date=lines[3],
-            files_changed=[f for f in lines[4:] if f.strip()],
+            files_changed=files,
         )
         commits.append(commit)
     return commits
@@ -110,22 +118,30 @@ def get_commit_diff(path: str, commit_hash: str, file_paths: list = None) -> str
 
 def get_single_commit(path: str, commit_hash: str) -> Optional[CommitInfo]:
     """Get info for a single commit."""
-    fmt = "%H%n%an%n%s%n%ai"
     output = run_git(
-        ["log", "-1", f"--format={fmt}", "--name-only", commit_hash],
+        [
+            "log",
+            "-1",
+            "--format=COMMIT_SEP%n%H%n%an%n%s%n%ai",
+            "--name-only",
+            commit_hash,
+        ],
         cwd=path,
     )
     if not output:
         return None
-    lines = output.strip().split("\n")
+    # Strip the COMMIT_SEP prefix
+    entry = output.replace("COMMIT_SEP\n", "", 1).strip()
+    lines = entry.split("\n")
     if len(lines) < 4:
         return None
+    files = [f for f in lines[4:] if f.strip()]
     return CommitInfo(
         hash=lines[0],
         author=lines[1],
         message=lines[2],
         date=lines[3],
-        files_changed=[f for f in lines[4:] if f.strip()],
+        files_changed=files,
     )
 
 

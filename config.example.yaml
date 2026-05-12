@@ -1,0 +1,37 @@
+# BlackPanKnight 配置文件模板
+# 复制为 config.yaml 并填入实际值
+
+global:
+  llm_base_url: "http://your-llm-server/v1/"   # OpenAI 兼容 API
+  llm_api_key: "your-api-key-here"
+  llm_model: "gpt-4o"
+  poll_interval_minutes: 30
+
+repos:
+  # 模式 A: 测试模式 - 跑测试脚本，报告通过/失败
+  - name: "项目 Alpha 单元测试"
+    path: "/home/user/repos/alpha"
+    branches:
+      - "main"
+    sync_command: "git fetch origin"
+    mode: test
+    test_script: "./run_tests.sh"
+    webhook_url: "https://open.feishu.cn/base/webhook/xxx"
+    poll_interval_minutes: 60
+
+  # 模式 B: 监控模式 - 监控文件变更 + AI 分析
+  - name: "团队 B 底层仓库"
+    path: "/home/user/repos/platform"
+    branches:
+      - "dev"
+      - "main"
+    sync_command: "git fetch origin"
+    mode: watch
+    watch_paths:
+      - "src/core/"
+      - "src/drivers/"
+      - "include/*.h"
+      - "configs/"
+    webhook_url: "https://open.feishu.cn/base/webhook/yyy"
+    ai_analysis: true
+    poll_interval_minutes: 15

@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.modes.watch_mode import compute_diff_stat, filter_commit_by_paths
+from src.modes.watch_mode import compute_diff_stat, filter_commit_by_paths, process_commit
 from src.repo import CommitInfo
 
 
@@ -81,3 +81,69 @@ class TestComputeDiffStat:
     def test_ignores_file_headers(self):
         diff = "--- a/file.c\n+++ b/file.c\n+real add\n-real remove\n"
         assert compute_diff_stat(diff) == "+1/-1"
+
+
+class TestWatchModeIntegration:
+    """Integration tests verifying the full watch pipeline with real git parsing."""
+
+    def test_unmatched_commit_not_processed(self):
+        """A commit that doesn't match watch_paths should return False."""
+        from unittest.mock import MagicMock, patch
+
+        from src.config import GlobalConfig, RepoConfig
+
+        repo = RepoConfig(
+            name="Test",
+            path="/tmp",
+            branches=["main"],
+            mode="watch",
+            watch_paths=["drivers/gpu/"],
+            webhook_url="http://x",
+        )
+        gc = GlobalConfig()
+        commit = CommitInfo(
+            hash="abc123",
+            author="dev",
+            message="docs: update readme",
+            date="2026-01-01",
+            files_changed=["README.md", "docs/guide.md"],
+        )
+        result = process_commit(repo, gc, commit, "main", None)
+        assert result is False
+
+    def test_matched_commit_pushes_webhook(self):
+        """A commit matching watch_paths should push to webhook."""
+        from unittest.mock import MagicMock, patch
+
+        from src.config import GlobalConfig, RepoConfig
+
+        repo = RepoConfig(
+            name="Test",
+            path="/tmp",
+            branches=["main"],
+            mode="watch",
+            watch_paths=["drivers/gpu/", "src/core/"],
+            webhook_url="http://x",
+        )
+        gc = GlobalConfig()
+        commit = CommitInfo(
+            hash="def456abc789",
+            author="dev",
+            message="perf: optimize gpu pipeline",
+            date="2026-01-01",
+            files_changed=["drivers/gpu/render.c", "README.md"],
+        )
+
+        with patch("src.modes.watch_mode.get_commit_diff") as mock_diff, \
+             patch("src.modes.watch_mode.push_watch_result") as mock_push:
+            mock_diff.return_value = "+new line\n-old line\n"
+            mock_push.return_value = True
+
+            result = process_commit(repo, gc, commit, "main", None)
+
+            assert result is True
+            mock_push.assert_called_once()
+            call_kwargs = mock_push.call_args[1]
+            assert call_kwargs["commit_hash"] == "def456abc789"
+            assert "drivers/gpu/render.c" in call_kwargs["files_changed"]
+            assert "README.md" not in call_kwargs["files_changed"]

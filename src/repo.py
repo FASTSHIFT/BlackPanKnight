@@ -1,11 +1,14 @@
 """Git repository operations for BlackPanKnight."""
 
 import logging
+import re
 import subprocess
 from dataclasses import dataclass
 from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+_CHANGE_ID_RE = re.compile(r"Change-Id:\s*(I[0-9a-fA-F]+)")
 
 
 @dataclass
@@ -15,6 +18,16 @@ class CommitInfo:
     message: str
     date: str
     files_changed: list
+    change_id: str = ""
+
+
+def _extract_change_id(commit_hash: str, cwd: str) -> str:
+    """Extract Gerrit Change-Id from commit body."""
+    body = run_git(["log", "-1", "--format=%b", commit_hash], cwd=cwd)
+    if not body:
+        return ""
+    match = _CHANGE_ID_RE.search(body)
+    return match.group(1) if match else ""
 
 
 def run_git(args: list, cwd: str) -> Optional[str]:
@@ -102,6 +115,7 @@ def get_commits_between(path: str, old_hash: str, new_hash: str) -> list:
             message=lines[2],
             date=lines[3],
             files_changed=files,
+            change_id=_extract_change_id(lines[0], cwd=path),
         )
         commits.append(commit)
     return commits
@@ -142,6 +156,7 @@ def get_single_commit(path: str, commit_hash: str) -> Optional[CommitInfo]:
         message=lines[2],
         date=lines[3],
         files_changed=files,
+        change_id=_extract_change_id(lines[0], cwd=path),
     )
 
 

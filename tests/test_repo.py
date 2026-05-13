@@ -145,11 +145,15 @@ def multi_file_repo():
     subprocess.run(["git", "init"], cwd=tmpdir, check=True, capture_output=True)
     subprocess.run(
         ["git", "config", "user.email", "dev@test.com"],
-        cwd=tmpdir, check=True, capture_output=True,
+        cwd=tmpdir,
+        check=True,
+        capture_output=True,
     )
     subprocess.run(
         ["git", "config", "user.name", "Developer"],
-        cwd=tmpdir, check=True, capture_output=True,
+        cwd=tmpdir,
+        check=True,
+        capture_output=True,
     )
 
     # Create subdirectories
@@ -163,7 +167,9 @@ def multi_file_repo():
     subprocess.run(["git", "add", "."], cwd=tmpdir, check=True, capture_output=True)
     subprocess.run(
         ["git", "commit", "-m", "init"],
-        cwd=tmpdir, check=True, capture_output=True,
+        cwd=tmpdir,
+        check=True,
+        capture_output=True,
     )
 
     # Commit 2: multiple files across directories
@@ -176,7 +182,9 @@ def multi_file_repo():
     subprocess.run(["git", "add", "."], cwd=tmpdir, check=True, capture_output=True)
     subprocess.run(
         ["git", "commit", "-m", "feat: add core modules"],
-        cwd=tmpdir, check=True, capture_output=True,
+        cwd=tmpdir,
+        check=True,
+        capture_output=True,
     )
 
     # Commit 3: modify existing + add new
@@ -187,7 +195,9 @@ def multi_file_repo():
     subprocess.run(["git", "add", "."], cwd=tmpdir, check=True, capture_output=True)
     subprocess.run(
         ["git", "commit", "-m", "perf: optimize scheduler lock"],
-        cwd=tmpdir, check=True, capture_output=True,
+        cwd=tmpdir,
+        check=True,
+        capture_output=True,
     )
 
     yield tmpdir
@@ -218,7 +228,9 @@ def test_commits_between_multi_file(multi_file_repo):
 
     assert commits[1].message == "feat: add core modules"
     assert sorted(commits[1].files_changed) == [
-        "drivers/gpu/render.c", "include/spinlock.h", "src/core/sched.c"
+        "drivers/gpu/render.c",
+        "include/spinlock.h",
+        "src/core/sched.c",
     ]
 
 
@@ -271,3 +283,80 @@ def test_get_commit_diff_no_filter(multi_file_repo):
     assert "gpu_render" in diff
     assert "spinlock" in diff
     assert "sched_init" in diff
+
+
+@pytest.fixture
+def repo_with_change_id():
+    """Create a repo with Gerrit-style Change-Id in commit messages."""
+    tmpdir = tempfile.mkdtemp()
+    subprocess.run(["git", "init"], cwd=tmpdir, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.email", "dev@test.com"],
+        cwd=tmpdir,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Dev"],
+        cwd=tmpdir,
+        check=True,
+        capture_output=True,
+    )
+
+    # Commit with Change-Id
+    filepath = os.path.join(tmpdir, "core.c")
+    with open(filepath, "w") as f:
+        f.write("void init(void) {}\n")
+    subprocess.run(["git", "add", "."], cwd=tmpdir, check=True, capture_output=True)
+    subprocess.run(
+        [
+            "git",
+            "commit",
+            "-m",
+            "fix: resolve race condition\n\nTICKET-12345\n\n"
+            "Change-Id: I1234567890abcdef1234567890abcdef12345678\n"
+            "Signed-off-by: Dev <dev@test.com>",
+        ],
+        cwd=tmpdir,
+        check=True,
+        capture_output=True,
+    )
+
+    # Commit without Change-Id
+    with open(filepath, "w") as f:
+        f.write("void init(void) { /* v2 */ }\n")
+    subprocess.run(["git", "add", "."], cwd=tmpdir, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "docs: update comments"],
+        cwd=tmpdir,
+        check=True,
+        capture_output=True,
+    )
+
+    yield tmpdir
+    subprocess.run(["rm", "-rf", tmpdir])
+
+
+def test_change_id_extracted(repo_with_change_id):
+    """Verify Change-Id is correctly parsed from commit body."""
+    log = run_git(["log", "--format=%H", "--reverse"], cwd=repo_with_change_id)
+    hashes = log.split("\n")
+    commit = get_single_commit(repo_with_change_id, hashes[0])
+    assert commit.change_id == "I1234567890abcdef1234567890abcdef12345678"
+
+
+def test_change_id_empty_when_missing(repo_with_change_id):
+    """Verify change_id is empty string when commit has no Change-Id."""
+    head = run_git(["rev-parse", "HEAD"], cwd=repo_with_change_id)
+    commit = get_single_commit(repo_with_change_id, head)
+    assert commit.change_id == ""
+
+
+def test_commits_between_with_change_id(repo_with_change_id):
+    """Verify change_id is populated in get_commits_between results."""
+    log = run_git(["log", "--format=%H", "--reverse"], cwd=repo_with_change_id)
+    hashes = log.split("\n")
+    commits = get_commits_between(repo_with_change_id, hashes[0], hashes[1])
+    assert len(commits) == 1
+    # Second commit has no Change-Id
+    assert commits[0].change_id == ""

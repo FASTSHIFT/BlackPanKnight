@@ -84,4 +84,5 @@ def process_commit(
         diff_stat=diff_stat,
         risk_level=risk_level,
         ai_summary=ai_summary,
+        change_id=commit.change_id,
     )

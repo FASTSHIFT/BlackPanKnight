@@ -2,7 +2,11 @@
 
 import pytest
 
-from src.modes.watch_mode import compute_diff_stat, filter_commit_by_paths, process_commit
+from src.modes.watch_mode import (
+    compute_diff_stat,
+    filter_commit_by_paths,
+    process_commit,
+)
 from src.repo import CommitInfo
 
 
@@ -88,8 +92,6 @@ class TestWatchModeIntegration:
 
     def test_unmatched_commit_not_processed(self):
         """A commit that doesn't match watch_paths should return False."""
-        from unittest.mock import MagicMock, patch
-
         from src.config import GlobalConfig, RepoConfig
 
         repo = RepoConfig(
@@ -113,7 +115,7 @@ class TestWatchModeIntegration:
 
     def test_matched_commit_pushes_webhook(self):
         """A commit matching watch_paths should push to webhook."""
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import patch
 
         from src.config import GlobalConfig, RepoConfig
 
@@ -134,8 +136,9 @@ class TestWatchModeIntegration:
             files_changed=["drivers/gpu/render.c", "README.md"],
         )
 
-        with patch("src.modes.watch_mode.get_commit_diff") as mock_diff, \
-             patch("src.modes.watch_mode.push_watch_result") as mock_push:
+        with patch("src.modes.watch_mode.get_commit_diff") as mock_diff, patch(
+            "src.modes.watch_mode.push_watch_result"
+        ) as mock_push:
             mock_diff.return_value = "+new line\n-old line\n"
             mock_push.return_value = True
 

@@ -360,3 +360,39 @@ def test_commits_between_with_change_id(repo_with_change_id):
     assert len(commits) == 1
     # Second commit has no Change-Id
     assert commits[0].change_id == ""
+
+
+def test_get_recent_commits_has_change_id(repo_with_change_id):
+    """Verify get_recent_commits also extracts Change-Id."""
+    from src.repo import get_recent_commits
+
+    log = run_git(["log", "--format=%H", "--reverse"], cwd=repo_with_change_id)
+    hashes = log.split("\n")
+    # First commit has Change-Id
+    commits = get_recent_commits(repo_with_change_id, hashes[0], n=1)
+    assert len(commits) == 1
+    assert commits[0].change_id == "I1234567890abcdef1234567890abcdef12345678"
+
+
+def test_get_recent_commits_no_change_id(repo_with_change_id):
+    """Verify get_recent_commits returns empty change_id when missing."""
+    from src.repo import get_recent_commits
+
+    head = run_git(["rev-parse", "HEAD"], cwd=repo_with_change_id)
+    # Second commit (HEAD) has no Change-Id
+    commits = get_recent_commits(repo_with_change_id, head, n=1)
+    assert len(commits) == 1
+    assert commits[0].change_id == ""
+
+
+def test_get_recent_commits_multiple_with_change_id(repo_with_change_id):
+    """Verify change_id is correct for each commit in multi-commit result."""
+    from src.repo import get_recent_commits
+
+    head = run_git(["rev-parse", "HEAD"], cwd=repo_with_change_id)
+    commits = get_recent_commits(repo_with_change_id, head, n=2)
+    assert len(commits) == 2
+    # Most recent first (no Change-Id)
+    assert commits[0].change_id == ""
+    # Older one has Change-Id
+    assert commits[1].change_id == "I1234567890abcdef1234567890abcdef12345678"

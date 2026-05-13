@@ -13,6 +13,7 @@ def send_webhook(webhook_url: str, payload: dict) -> bool:
     """Send a payload to a Feishu Bitable webhook."""
     headers = {"Content-Type": "application/json"}
     try:
+        logger.info(f"Webhook payload: {json.dumps(payload, ensure_ascii=False)}")
         response = requests.post(
             webhook_url, headers=headers, data=json.dumps(payload), timeout=10
         )
@@ -101,7 +102,7 @@ def build_watch_payload(
         "分支": branch,
         "提交者": author,
         "Commit": commit_hash[:8],
-        "Change-Id": change_id,
+        "ChangeId": change_id,
         "提交信息": commit_message,
         "变更文件": files_changed,
         "变更统计": diff_stat,

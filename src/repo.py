@@ -21,6 +21,20 @@ class CommitInfo:
     change_id: str = ""
 
 
+def _build_commit_info(
+    hash: str, author: str, message: str, date: str, files_changed: list, cwd: str
+) -> "CommitInfo":
+    """Single entry point for creating CommitInfo with all derived fields."""
+    return CommitInfo(
+        hash=hash,
+        author=author,
+        message=message,
+        date=date,
+        files_changed=files_changed,
+        change_id=_extract_change_id(hash, cwd=cwd),
+    )
+
+
 def _extract_change_id(commit_hash: str, cwd: str) -> str:
     """Extract Gerrit Change-Id from commit body."""
     body = run_git(["log", "-1", "--format=%b", commit_hash], cwd=cwd)
@@ -109,13 +123,13 @@ def get_commits_between(path: str, old_hash: str, new_hash: str) -> list:
             continue
         # Lines: hash, author, message, date, blank, file1, file2, ...
         files = [f for f in lines[4:] if f.strip()]
-        commit = CommitInfo(
+        commit = _build_commit_info(
             hash=lines[0],
             author=lines[1],
             message=lines[2],
             date=lines[3],
             files_changed=files,
-            change_id=_extract_change_id(lines[0], cwd=path),
+            cwd=path,
         )
         commits.append(commit)
     return commits
@@ -150,13 +164,13 @@ def get_single_commit(path: str, commit_hash: str) -> Optional[CommitInfo]:
     if len(lines) < 4:
         return None
     files = [f for f in lines[4:] if f.strip()]
-    return CommitInfo(
+    return _build_commit_info(
         hash=lines[0],
         author=lines[1],
         message=lines[2],
         date=lines[3],
         files_changed=files,
-        change_id=_extract_change_id(lines[0], cwd=path),
+        cwd=path,
     )
 
 
@@ -179,12 +193,13 @@ def get_recent_commits(path: str, head_hash: str, n: int = 1) -> list:
             # This is a commit header line - save previous commit first
             if current_meta:
                 commits.append(
-                    CommitInfo(
+                    _build_commit_info(
                         hash=current_meta[0],
                         author=current_meta[1],
                         message=current_meta[2],
                         date=current_meta[3],
                         files_changed=current_files,
+                        cwd=path,
                     )
                 )
             current_meta = line.split("\x00")
@@ -195,12 +210,13 @@ def get_recent_commits(path: str, head_hash: str, n: int = 1) -> list:
     # Don't forget the last commit
     if current_meta:
         commits.append(
-            CommitInfo(
+            _build_commit_info(
                 hash=current_meta[0],
                 author=current_meta[1],
                 message=current_meta[2],
                 date=current_meta[3],
                 files_changed=current_files,
+                cwd=path,
             )
         )
     return commits

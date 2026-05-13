@@ -14,8 +14,8 @@ logging.basicConfig(
 
 
 def test_webhook(config):
-    """Send a test message to verify webhook connectivity."""
-    from src.notify.webhook import send_webhook
+    """Send a test message using the real push interface."""
+    from src.notify.webhook import push_watch_result
 
     webhook_url = config.global_config.webhook_url
     if not webhook_url and config.repos:
@@ -25,21 +25,21 @@ def test_webhook(config):
         print("❌ 未配置 webhook_url")
         return 1
 
-    payload = {
-        "仓库": "BlackPanKnight",
-        "分支": "test",
-        "提交者": "黑锅侠",
-        "Commit": "test1234",
-        "提交信息": "🛡️ Webhook 连通性测试",
-        "变更文件": "N/A",
-        "变更统计": "+0/-0",
-        "AI风险等级": "🟢 低风险",
-        "AI分析": "这是一条测试消息，确认 webhook 推送正常工作",
-        "时间": __import__("datetime").datetime.now().strftime("%Y-%m-%d %H:%M"),
-    }
-
     print(f"📤 发送测试消息到: {webhook_url[:50]}...")
-    if send_webhook(webhook_url, payload):
+    ok = push_watch_result(
+        webhook_url=webhook_url,
+        repo_name="BlackPanKnight",
+        branch="test",
+        author="黑锅侠",
+        commit_hash="test1234abcd5678",
+        commit_message="🛡️ Webhook 连通性测试",
+        files_changed=["src/test.c", "include/test.h"],
+        diff_stat="+42/-0",
+        risk_level="🟢 低风险",
+        ai_summary="这是一条测试消息，确认 webhook 推送正常工作",
+        change_id="I0000000000000000000000000000000000000000",
+    )
+    if ok:
         print("✅ Webhook 测试成功！")
         return 0
     else:

@@ -60,6 +60,7 @@ def build_watch_payload(
     risk_level: str = "",
     ai_summary: str = "",
     change_id: str = "",
+    remote: str = "",
 ) -> dict:
     """Build payload for watch mode results."""
     import random
@@ -99,6 +100,7 @@ def build_watch_payload(
 
     return {
         "仓库": repo_name,
+        "来源": remote,
         "分支": branch,
         "提交者": author,
         "Commit": commit_hash[:8],
@@ -144,6 +146,7 @@ def push_watch_result(
     risk_level: str = "",
     ai_summary: str = "",
     change_id: str = "",
+    remote: str = "",
 ) -> bool:
     """Push a watch analysis result to the webhook."""
     files_str = ", ".join(files_changed[:10])
@@ -160,5 +163,6 @@ def push_watch_result(
         risk_level,
         ai_summary,
         change_id,
+        remote,
     )
     return send_webhook(webhook_url, payload)

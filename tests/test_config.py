@@ -221,3 +221,34 @@ repos:
         assert config.repos[0].webhook_url == ""  # not set at repo level
     finally:
         os.unlink(path)
+
+
+def test_repo_remote_field(config_file):
+    """Verify remote field is parsed from config."""
+    import tempfile
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+        f.write("""
+repos:
+  - name: "Test"
+    path: "/tmp"
+    branches: ["main"]
+    remote: "upstream"
+    mode: watch
+    watch_paths: ["src/"]
+    webhook_url: "http://x"
+""")
+        f.flush()
+        path = f.name
+
+    try:
+        config = load_config(path)
+        assert config.repos[0].remote == "upstream"
+    finally:
+        os.unlink(path)
+
+
+def test_repo_remote_default_empty(config_file):
+    """Verify remote defaults to empty string when not specified."""
+    config = load_config(config_file)
+    assert config.repos[0].remote == ""

@@ -23,6 +23,7 @@ class RepoConfig:
     name: str = ""
     path: str = ""
     branches: list = field(default_factory=list)
+    remote: str = ""  # e.g. "upstream", "origin"
     sync_command: str = ""
     mode: str = "watch"  # "test" or "watch"
     test_script: str = ""
@@ -70,6 +71,7 @@ def load_config(config_path: str) -> AppConfig:
             name=repo_raw.get("name", ""),
             path=repo_raw.get("path", ""),
             branches=repo_raw.get("branches", []),
+            remote=repo_raw.get("remote", ""),
             sync_command=repo_raw.get("sync_command", ""),
             mode=repo_raw.get("mode", "watch"),
             test_script=repo_raw.get("test_script", ""),

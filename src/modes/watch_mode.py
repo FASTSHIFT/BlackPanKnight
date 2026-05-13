@@ -85,4 +85,5 @@ def process_commit(
         risk_level=risk_level,
         ai_summary=ai_summary,
         change_id=commit.change_id,
+        remote=repo_config.remote,
     )

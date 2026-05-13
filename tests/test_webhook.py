@@ -62,3 +62,33 @@ class TestSendWebhook:
 
         result = send_webhook("http://example.com/hook", {"key": "value"})
         assert result is False
+
+
+class TestBuildWatchPayloadRemote:
+    def test_remote_in_payload(self):
+        payload = build_watch_payload(
+            repo_name="Test",
+            branch="main",
+            author="dev",
+            commit_hash="abc123def456",
+            commit_message="fix: something",
+            files_changed="a.c",
+            diff_stat="+1/-1",
+            risk_level="🟢 低风险",
+            ai_summary="safe",
+            change_id="I123",
+            remote="upstream",
+        )
+        assert payload["来源"] == "upstream"
+
+    def test_remote_empty_when_not_provided(self):
+        payload = build_watch_payload(
+            repo_name="Test",
+            branch="main",
+            author="dev",
+            commit_hash="abc123def456",
+            commit_message="fix: something",
+            files_changed="a.c",
+            diff_stat="+1/-1",
+        )
+        assert payload["来源"] == ""

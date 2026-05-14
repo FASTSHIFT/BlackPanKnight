@@ -14,37 +14,65 @@ logging.basicConfig(
 
 
 def test_webhook(config):
-    """Send a test message using the real push interface."""
-    from src.notify.webhook import push_watch_result
+    """Test webhook connectivity for all unique webhook URLs."""
+    from src.notify.webhook import push_test_result, push_watch_result
 
-    webhook_url = config.global_config.webhook_url
-    if not webhook_url and config.repos:
-        webhook_url = config.repos[0].webhook_url
+    # Collect unique (webhook_url, mode) pairs
+    tested = set()
+    errors = 0
 
-    if not webhook_url:
-        print("❌ 未配置 webhook_url")
+    for repo in config.repos:
+        url = repo.webhook_url or config.global_config.webhook_url
+        if not url:
+            continue
+        key = (url, repo.mode)
+        if key in tested:
+            continue
+        tested.add(key)
+
+        print(f"\n📤 [{repo.name}] ({repo.mode}) -> {url[:50]}...")
+
+        if repo.mode == "watch":
+            ok = push_watch_result(
+                webhook_url=url,
+                repo_name=repo.name,
+                branch="test",
+                author="黑锅侠",
+                commit_hash="test1234abcd5678",
+                commit_message="🛡️ Webhook 连通性测试",
+                files_changed=["src/test.c", "include/test.h"],
+                diff_stat="+42/-0",
+                risk_level="🟢 低风险",
+                risk_score=0,
+                ai_title="📝 轻舟已过万重山，测试发了一条消息",
+                ai_summary="这是一条测试消息，确认 watch 模式 webhook 推送正常",
+                change_id="I0000000000000000000000000000000000000000",
+                remote=repo.remote,
+            )
+        else:
+            ok = push_test_result(
+                webhook_url=url,
+                repo_name=repo.name,
+                branch="test",
+                passed=True,
+                author="黑锅侠",
+                commit_hash="test1234abcd5678",
+                commit_message="🛡️ Webhook 连通性测试",
+                change_id="I0000000000000000000000000000000000000000",
+                title="✅ 连通性测试，一切正常！",
+            )
+
+        if ok:
+            print("   ✅ 成功")
+        else:
+            print("   ❌ 失败")
+            errors += 1
+
+    if not tested:
+        print("❌ 未配置任何 webhook_url")
         return 1
 
-    print(f"📤 发送测试消息到: {webhook_url[:50]}...")
-    ok = push_watch_result(
-        webhook_url=webhook_url,
-        repo_name="BlackPanKnight",
-        branch="test",
-        author="黑锅侠",
-        commit_hash="test1234abcd5678",
-        commit_message="🛡️ Webhook 连通性测试",
-        files_changed=["src/test.c", "include/test.h"],
-        diff_stat="+42/-0",
-        risk_level="🟢 低风险",
-        ai_summary="这是一条测试消息，确认 webhook 推送正常工作",
-        change_id="I0000000000000000000000000000000000000000",
-    )
-    if ok:
-        print("✅ Webhook 测试成功！")
-        return 0
-    else:
-        print("❌ Webhook 发送失败")
-        return 1
+    return 1 if errors else 0
 
 
 def test_llm(config):
@@ -230,6 +258,9 @@ def main():
     parser.add_argument(
         "--test-all", action="store_true", help="全链路测试（仓库+webhook+LLM）"
     )
+    parser.add_argument(
+        "--run-test", action="store_true", help="立即对 test 模式仓库执行一次测试并上报"
+    )
     args = parser.parse_args()
 
     config = load_config(args.config)
@@ -255,7 +286,9 @@ def main():
 
     scheduler = Scheduler(config)
 
-    if args.analyze_head:
+    if args.run_test:
+        scheduler.run_test_now()
+    elif args.analyze_head:
         scheduler.run_head(n=args.analyze_head)
     elif args.once:
         scheduler.run_once()

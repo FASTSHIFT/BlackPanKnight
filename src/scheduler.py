@@ -23,7 +23,6 @@ class Scheduler:
         self.llm_client: Optional[LLMClient] = None
         # Per-repo, per-branch state: {(repo_name, branch): commit_hash}
         self._last_commit: dict = {}
-        self._last_pass_commit: dict = {}
 
         # Initialize LLM client if any repo needs AI
         gc = config.global_config
@@ -85,11 +84,13 @@ class Scheduler:
 
         for commit in commits:
             if repo_config.mode == "test":
-                passed = test_mode.process_commit(
-                    repo_config, commit, branch, self._last_pass_commit.get(key)
+                test_mode.process_commit(
+                    repo_config,
+                    commit,
+                    branch,
+                    None,
+                    self.llm_client,
                 )
-                if passed:
-                    self._last_pass_commit[key] = commit.hash
             elif repo_config.mode == "watch":
                 watch_mode.process_commit(
                     repo_config,
@@ -113,6 +114,40 @@ class Scheduler:
             interval = self.config.global_config.poll_interval_minutes
             logger.info(f"Sleeping {interval} minutes...")
             time.sleep(interval * 60)
+
+    def run_test_now(self):
+        """Immediately run tests for all test-mode repos and report results."""
+        logger.info("Running tests now...")
+        for repo_config in self.config.repos:
+            if repo_config.mode != "test":
+                continue
+
+            # Apply global fallbacks
+            if not repo_config.webhook_url:
+                repo_config.webhook_url = self.config.global_config.webhook_url
+            if not repo_config.sync_command:
+                repo_config.sync_command = self.config.global_config.sync_command
+
+            if not sync_repo(repo_config.path, repo_config.sync_command):
+                logger.error(f"[{repo_config.name}] Sync failed, skipping")
+                continue
+
+            for branch in repo_config.branches:
+                head = get_branch_head(repo_config.path, branch)
+                if not head:
+                    logger.warning(
+                        f"[{repo_config.name}] Cannot resolve branch {branch}"
+                    )
+                    continue
+
+                commit = get_recent_commits(repo_config.path, head, n=1)
+                if not commit:
+                    continue
+
+                logger.info(f"[{repo_config.name}/{branch}] Running test...")
+                test_mode.process_commit(
+                    repo_config, commit[0], branch, None, self.llm_client
+                )
 
     def run_head(self, n: int = 1):
         """Analyze the latest N commits on each branch (no state tracking)."""
@@ -144,7 +179,9 @@ class Scheduler:
 
                 for commit in commits:
                     if repo_config.mode == "test":
-                        test_mode.process_commit(repo_config, commit, branch)
+                        test_mode.process_commit(
+                            repo_config, commit, branch, None, self.llm_client
+                        )
                     elif repo_config.mode == "watch":
                         watch_mode.process_commit(
                             repo_config,

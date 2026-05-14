@@ -126,7 +126,7 @@ def test_run_once_new_commits_test(
     scheduler.run_once()
 
     mock_process.assert_called_once()
-    assert scheduler._last_pass_commit[("Test Runner", "main")] == "new_hash"
+    assert scheduler._last_commit[("Test Runner", "main")] == "new_hash"
 
 
 @patch("src.scheduler.sync_repo")
@@ -208,3 +208,44 @@ def test_run_head_sync_failure(mock_sync, watch_config):
     scheduler = Scheduler(watch_config)
     scheduler.run_head(n=1)
     # Should not crash, just skip
+
+
+@patch("src.scheduler.test_mode.process_commit")
+@patch("src.scheduler.get_recent_commits")
+@patch("src.scheduler.sync_repo")
+@patch("src.scheduler.get_branch_head")
+def test_run_test_now(mock_head, mock_sync, mock_recent, mock_process, test_config):
+    mock_sync.return_value = True
+    mock_head.return_value = "head_hash"
+    mock_recent.return_value = [
+        MagicMock(hash="head_hash", author="dev", message="fix")
+    ]
+    mock_process.return_value = True
+
+    scheduler = Scheduler(test_config)
+    scheduler.run_test_now()
+
+    mock_process.assert_called_once()
+
+
+@patch("src.scheduler.test_mode.process_commit")
+@patch("src.scheduler.get_recent_commits")
+@patch("src.scheduler.sync_repo")
+@patch("src.scheduler.get_branch_head")
+def test_run_test_now_skips_watch_repos(
+    mock_head, mock_sync, mock_recent, mock_process, watch_config
+):
+    scheduler = Scheduler(watch_config)
+    scheduler.run_test_now()
+
+    # watch mode repos should be skipped
+    mock_process.assert_not_called()
+
+
+@patch("src.scheduler.sync_repo")
+def test_run_test_now_sync_failure(mock_sync, test_config):
+    mock_sync.return_value = False
+
+    scheduler = Scheduler(test_config)
+    scheduler.run_test_now()
+    # Should not crash

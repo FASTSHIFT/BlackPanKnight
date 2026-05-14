@@ -5,6 +5,8 @@ from unittest.mock import MagicMock, patch
 from src.notify.webhook import (
     build_test_payload,
     build_watch_payload,
+    push_test_result,
+    push_watch_result,
     send_webhook,
 )
 
@@ -18,13 +20,12 @@ class TestBuildPayloads:
             author="zhangsan",
             commit_hash="abc123def456",
             commit_message="fix: bug",
-            suspects="",
         )
+        assert payload["标题"] == "叮铃铃~ 测试通过!"
         assert payload["仓库"] == "Test Repo"
         assert payload["分支"] == "main"
         assert payload["状态"] == "✅ 通过"
         assert payload["Commit"] == "abc123de"
-        assert payload["怀疑对象"] == ""
 
     def test_build_watch_payload(self):
         payload = build_watch_payload(
@@ -98,3 +99,78 @@ class TestBuildWatchPayloadRemote:
             diff_stat="+1/-1",
         )
         assert payload["来源"] == ""
+
+
+class TestPushFunctions:
+    @patch("src.notify.webhook.send_webhook")
+    def test_push_watch_result(self, mock_send):
+        mock_send.return_value = True
+        result = push_watch_result(
+            webhook_url="http://x",
+            repo_name="R",
+            branch="main",
+            author="dev",
+            commit_hash="abc123def456",
+            commit_message="fix",
+            files_changed=["a.c", "b.c", "c.c"],
+            diff_stat="+10/-5",
+            risk_level="🟢 低风险",
+            risk_score=2,
+            ai_title="📝 诗句",
+            ai_summary="safe",
+            change_id="I123",
+            remote="upstream",
+        )
+        assert result is True
+        mock_send.assert_called_once()
+
+    @patch("src.notify.webhook.send_webhook")
+    def test_push_watch_result_truncates_files(self, mock_send):
+        mock_send.return_value = True
+        files = [f"file{i}.c" for i in range(15)]
+        push_watch_result(
+            webhook_url="http://x",
+            repo_name="R",
+            branch="main",
+            author="dev",
+            commit_hash="abc123def456",
+            commit_message="fix",
+            files_changed=files,
+            diff_stat="+10/-5",
+        )
+        payload = mock_send.call_args[0][1]
+        assert "+5 files" in payload["变更文件"]
+
+    @patch("src.notify.webhook.send_webhook")
+    def test_push_test_result_pass(self, mock_send):
+        mock_send.return_value = True
+        result = push_test_result(
+            webhook_url="http://x",
+            repo_name="R",
+            branch="main",
+            passed=True,
+            author="dev",
+            commit_hash="abc123def456",
+            commit_message="fix",
+        )
+        assert result is True
+        payload = mock_send.call_args[0][1]
+        assert payload["状态"] == "✅ 通过"
+        assert payload["标题"] == "叮铃铃~ 测试通过!"
+
+    @patch("src.notify.webhook.send_webhook")
+    def test_push_test_result_fail_with_title(self, mock_send):
+        mock_send.return_value = True
+        push_test_result(
+            webhook_url="http://x",
+            repo_name="R",
+            branch="main",
+            passed=False,
+            author="dev",
+            commit_hash="abc123def456",
+            commit_message="fix",
+            title="💥 炸了！",
+        )
+        payload = mock_send.call_args[0][1]
+        assert payload["状态"] == "❌ 失败"
+        assert payload["标题"] == "💥 炸了！"

@@ -3,7 +3,7 @@
 import os
 import stat
 import tempfile
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -74,21 +74,11 @@ class TestProcessCommit:
         call_kwargs = mock_push.call_args
         assert call_kwargs[1]["passed"] is True
 
-    @patch("src.modes.test_mode.get_commits_between")
     @patch("src.modes.test_mode.push_test_result")
     @patch("src.modes.test_mode.run_test_script")
-    def test_process_failing_with_suspects(self, mock_run, mock_push, mock_between):
+    def test_process_failing(self, mock_run, mock_push):
         mock_run.return_value = 1
         mock_push.return_value = True
-        mock_between.return_value = [
-            CommitInfo(
-                hash="sus123",
-                author="suspect",
-                message="bad change",
-                date="now",
-                files_changed=[],
-            )
-        ]
 
         repo = RepoConfig(
             name="R",
@@ -106,6 +96,41 @@ class TestProcessCommit:
             files_changed=[],
         )
 
-        result = process_commit(repo, commit, "main", last_pass_hash="old123")
+        result = process_commit(repo, commit, "main")
         assert result is False
-        mock_between.assert_called_once()
+        mock_push.assert_called_once()
+        call_kwargs = mock_push.call_args
+        assert call_kwargs[1]["passed"] is False
+
+
+class TestGenerateTestTitle:
+    def test_returns_empty_without_llm(self):
+        from src.modes.test_mode import generate_test_title
+
+        title = generate_test_title(None, True, "Repo", "main", "dev", "fix")
+        assert title == ""
+
+    @patch("src.modes.test_mode.LLMClient")
+    def test_returns_title_on_success(self, mock_cls):
+        from src.modes.test_mode import generate_test_title
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = "🎉 全绿！稳如老狗"
+        mock_client.client.chat.completions.create.return_value = mock_response
+        mock_client.model = "test-model"
+
+        title = generate_test_title(mock_client, True, "Repo", "main", "dev", "fix")
+        assert "全绿" in title
+
+    @patch("src.modes.test_mode.LLMClient")
+    def test_returns_empty_on_failure(self, mock_cls):
+        from src.modes.test_mode import generate_test_title
+
+        mock_client = MagicMock()
+        mock_client.client.chat.completions.create.side_effect = Exception("err")
+        mock_client.model = "test-model"
+
+        title = generate_test_title(mock_client, False, "Repo", "main", "dev", "fix")
+        assert title == ""

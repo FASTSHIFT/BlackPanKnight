@@ -34,17 +34,22 @@ def build_test_payload(
     author: str,
     commit_hash: str,
     commit_message: str,
-    suspects: str = "",
+    change_id: str = "",
+    title: str = "",
 ) -> dict:
     """Build payload for test mode results."""
+    if not title:
+        title = "叮铃铃~ 测试通过!" if "通过" in status else "铛铛铛! 测试失败!"
+
     return {
+        "标题": title,
         "仓库": repo_name,
         "分支": branch,
         "状态": status,
         "提交者": author,
         "Commit": commit_hash[:8],
+        "ChangeId": change_id,
         "提交信息": commit_message,
-        "怀疑对象": suspects,
         "时间": datetime.now().strftime("%Y-%m-%d %H:%M"),
     }
 
@@ -91,12 +96,20 @@ def push_test_result(
     author: str,
     commit_hash: str,
     commit_message: str,
-    suspects: str = "",
+    change_id: str = "",
+    title: str = "",
 ) -> bool:
     """Push a test result to the webhook."""
     status = "✅ 通过" if passed else "❌ 失败"
     payload = build_test_payload(
-        repo_name, branch, status, author, commit_hash, commit_message, suspects
+        repo_name,
+        branch,
+        status,
+        author,
+        commit_hash,
+        commit_message,
+        change_id,
+        title,
     )
     return send_webhook(webhook_url, payload)
 

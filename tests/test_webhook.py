@@ -36,11 +36,17 @@ class TestBuildPayloads:
             files_changed="a.c, b.c",
             diff_stat="+10/-5",
             risk_level="🔴 高风险",
+            risk_score=65,
+            ai_title="热路径被动了，注意性能",
             ai_summary="修改了热路径",
+            remote="upstream",
         )
         assert payload["仓库"] == "Watch Repo"
-        assert payload["AI风险等级"] == "🔴 高风险"
+        assert payload["风险等级"] == "🔴 高风险"
+        assert payload["风险评分"] == "65/10"
+        assert payload["标题"] == "热路径被动了，注意性能"
         assert payload["变更统计"] == "+10/-5"
+        assert payload["来源"] == "upstream"
 
 
 class TestSendWebhook:

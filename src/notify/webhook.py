@@ -58,47 +58,15 @@ def build_watch_payload(
     files_changed: str,
     diff_stat: str,
     risk_level: str = "",
+    risk_score: int = 0,
+    ai_title: str = "",
     ai_summary: str = "",
     change_id: str = "",
     remote: str = "",
 ) -> dict:
     """Build payload for watch mode results."""
-    import random
-
-    # Fun titles based on risk level
-    if "高风险" in risk_level:
-        titles = [
-            "🚨 警报！锅正在飞来的路上",
-            "🍳 高危变更！准备接锅",
-            "⚠️ 危险操作！嫌疑人已锁定",
-            "🔥 紧急！性能杀手出没",
-        ]
-    elif "中风险" in risk_level:
-        titles = [
-            "🤔 有点意思，建议关注",
-            "👀 可疑变更，值得一看",
-            "📋 中等风险，留个心眼",
-            "🧐 这改动需要盯一下",
-        ]
-    else:
-        titles = [
-            "📝 例行报告，暂时安全",
-            "✅ 低风险变更，记录在案",
-            "😌 今日份平安，记录归档",
-            "📋 常规变更，无需紧张",
-        ]
-
-    title = random.choice(titles)
-
-    # Blame score (fun metric)
-    added = int(diff_stat.split("/")[0].replace("+", "") or "0")
-    removed = int(diff_stat.split("/")[1].replace("-", "") or "0")
-    risk_multiplier = {"高风险": 3, "中风险": 2}.get(
-        risk_level.replace("🔴 ", "").replace("🟡 ", "").replace("🟢 ", ""), 1
-    )
-    blame_score = (added + removed) * risk_multiplier
-
     return {
+        "标题": ai_title,
         "仓库": repo_name,
         "来源": remote,
         "分支": branch,
@@ -108,10 +76,9 @@ def build_watch_payload(
         "提交信息": commit_message,
         "变更文件": files_changed,
         "变更统计": diff_stat,
-        "AI风险等级": risk_level,
+        "风险等级": risk_level,
+        "风险评分": f"{risk_score}/10",
         "AI分析": ai_summary,
-        "甩锅指数": f"{'🔥' * min(blame_score // 50, 5)} {blame_score}",
-        "标题": title,
         "时间": datetime.now().strftime("%Y-%m-%d %H:%M"),
     }
 
@@ -144,6 +111,8 @@ def push_watch_result(
     files_changed: list,
     diff_stat: str,
     risk_level: str = "",
+    risk_score: int = 0,
+    ai_title: str = "",
     ai_summary: str = "",
     change_id: str = "",
     remote: str = "",
@@ -161,6 +130,8 @@ def push_watch_result(
         files_str,
         diff_stat,
         risk_level,
+        risk_score,
+        ai_title,
         ai_summary,
         change_id,
         remote,

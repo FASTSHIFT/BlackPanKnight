@@ -58,6 +58,8 @@ def process_commit(
 
     # AI analysis
     risk_level = ""
+    risk_score = 0
+    ai_title = ""
     ai_summary = ""
     if repo_config.ai_analysis and llm_client and diff_content:
         prompt_template = repo_config.ai_prompt or global_config.ai_prompt
@@ -70,6 +72,8 @@ def process_commit(
         )
         if result:
             risk_level = result.risk_level
+            risk_score = result.risk_score
+            ai_title = result.title
             ai_summary = result.summary
 
     # Push to webhook
@@ -83,6 +87,8 @@ def process_commit(
         files_changed=matched_files,
         diff_stat=diff_stat,
         risk_level=risk_level,
+        risk_score=risk_score,
+        ai_title=ai_title,
         ai_summary=ai_summary,
         change_id=commit.change_id,
         remote=repo_config.remote,

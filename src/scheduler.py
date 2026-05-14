@@ -1,6 +1,7 @@
 """Polling scheduler for multi-repo monitoring."""
 
 import logging
+import os
 import time
 from typing import Optional
 
@@ -36,6 +37,12 @@ class Scheduler:
     def run_once(self):
         """Run a single polling cycle across all repos."""
         for repo_config in self.config.repos:
+            if not os.path.isdir(repo_config.path):
+                logger.warning(
+                    f"[{repo_config.name}] Path not found: {repo_config.path}, skipping"
+                )
+                continue
+
             logger.info(f"Checking repo: {repo_config.name}")
 
             if not sync_repo(repo_config.path, repo_config.sync_command):
@@ -122,6 +129,12 @@ class Scheduler:
             if repo_config.mode != "test":
                 continue
 
+            if not os.path.isdir(repo_config.path):
+                logger.warning(
+                    f"[{repo_config.name}] Path not found: {repo_config.path}, skipping"
+                )
+                continue
+
             # Apply global fallbacks
             if not repo_config.webhook_url:
                 repo_config.webhook_url = self.config.global_config.webhook_url
@@ -153,6 +166,12 @@ class Scheduler:
         """Analyze the latest N commits on each branch (no state tracking)."""
         logger.info(f"Analyzing HEAD (latest {n} commits per branch)...")
         for repo_config in self.config.repos:
+            if not os.path.isdir(repo_config.path):
+                logger.warning(
+                    f"[{repo_config.name}] Path not found: {repo_config.path}, skipping"
+                )
+                continue
+
             # Apply global fallbacks
             if not repo_config.webhook_url:
                 repo_config.webhook_url = self.config.global_config.webhook_url

@@ -58,9 +58,12 @@ def test_scheduler_init_without_llm(test_config):
     assert scheduler.llm_client is None
 
 
+@patch("src.scheduler.os.path.isdir", return_value=True)
 @patch("src.scheduler.sync_repo")
 @patch("src.scheduler.get_branch_head")
-def test_run_once_first_run_records_state(mock_head, mock_sync, watch_config):
+def test_run_once_first_run_records_state(
+    mock_head, mock_sync, mock_isdir, watch_config
+):
     mock_sync.return_value = True
     mock_head.return_value = "abc123" * 7  # 42 chars but we just need non-None
 
@@ -71,9 +74,10 @@ def test_run_once_first_run_records_state(mock_head, mock_sync, watch_config):
     assert scheduler._last_commit[("Test Watch", "main")] == "abc123" * 7
 
 
+@patch("src.scheduler.os.path.isdir", return_value=True)
 @patch("src.scheduler.sync_repo")
 @patch("src.scheduler.get_branch_head")
-def test_run_once_no_change(mock_head, mock_sync, watch_config):
+def test_run_once_no_change(mock_head, mock_sync, mock_isdir, watch_config):
     mock_sync.return_value = True
     mock_head.return_value = "abc123"
 
@@ -85,12 +89,13 @@ def test_run_once_no_change(mock_head, mock_sync, watch_config):
     assert scheduler._last_commit[("Test Watch", "main")] == "abc123"
 
 
+@patch("src.scheduler.os.path.isdir", return_value=True)
 @patch("src.scheduler.watch_mode.process_commit")
 @patch("src.scheduler.get_commits_between")
 @patch("src.scheduler.sync_repo")
 @patch("src.scheduler.get_branch_head")
 def test_run_once_new_commits_watch(
-    mock_head, mock_sync, mock_commits, mock_process, watch_config
+    mock_head, mock_sync, mock_commits, mock_process, mock_isdir, watch_config
 ):
     mock_sync.return_value = True
     mock_head.return_value = "new_hash"
@@ -107,12 +112,13 @@ def test_run_once_new_commits_watch(
     assert scheduler._last_commit[("Test Watch", "main")] == "new_hash"
 
 
+@patch("src.scheduler.os.path.isdir", return_value=True)
 @patch("src.scheduler.test_mode.process_commit")
 @patch("src.scheduler.get_commits_between")
 @patch("src.scheduler.sync_repo")
 @patch("src.scheduler.get_branch_head")
 def test_run_once_new_commits_test(
-    mock_head, mock_sync, mock_commits, mock_process, test_config
+    mock_head, mock_sync, mock_commits, mock_process, mock_isdir, test_config
 ):
     mock_sync.return_value = True
     mock_head.return_value = "new_hash"
@@ -152,11 +158,14 @@ def test_run_once_branch_unresolvable(mock_head, mock_sync, watch_config):
     assert ("Test Watch", "main") not in scheduler._last_commit
 
 
+@patch("src.scheduler.os.path.isdir", return_value=True)
 @patch("src.scheduler.watch_mode.process_commit")
 @patch("src.scheduler.get_recent_commits")
 @patch("src.scheduler.get_branch_head")
 @patch("src.scheduler.sync_repo")
-def test_run_head_watch(mock_sync, mock_head, mock_recent, mock_process, watch_config):
+def test_run_head_watch(
+    mock_sync, mock_head, mock_recent, mock_process, mock_isdir, watch_config
+):
     mock_sync.return_value = True
     mock_head.return_value = "abc12345"
     mock_recent.return_value = [
@@ -171,11 +180,14 @@ def test_run_head_watch(mock_sync, mock_head, mock_recent, mock_process, watch_c
     mock_process.assert_called_once()
 
 
+@patch("src.scheduler.os.path.isdir", return_value=True)
 @patch("src.scheduler.test_mode.process_commit")
 @patch("src.scheduler.get_recent_commits")
 @patch("src.scheduler.get_branch_head")
 @patch("src.scheduler.sync_repo")
-def test_run_head_test(mock_sync, mock_head, mock_recent, mock_process, test_config):
+def test_run_head_test(
+    mock_sync, mock_head, mock_recent, mock_process, mock_isdir, test_config
+):
     mock_sync.return_value = True
     mock_head.return_value = "def67890"
     mock_recent.return_value = [
@@ -190,31 +202,34 @@ def test_run_head_test(mock_sync, mock_head, mock_recent, mock_process, test_con
     mock_process.assert_called_once()
 
 
+@patch("src.scheduler.os.path.isdir", return_value=True)
 @patch("src.scheduler.get_branch_head")
 @patch("src.scheduler.sync_repo")
-def test_run_head_branch_not_found(mock_sync, mock_head, watch_config):
+def test_run_head_branch_not_found(mock_sync, mock_head, mock_isdir, watch_config):
     mock_sync.return_value = True
     mock_head.return_value = None
 
     scheduler = Scheduler(watch_config)
     scheduler.run_head(n=1)
-    # Should not crash, just skip
 
 
+@patch("src.scheduler.os.path.isdir", return_value=True)
 @patch("src.scheduler.sync_repo")
-def test_run_head_sync_failure(mock_sync, watch_config):
+def test_run_head_sync_failure(mock_sync, mock_isdir, watch_config):
     mock_sync.return_value = False
 
     scheduler = Scheduler(watch_config)
     scheduler.run_head(n=1)
-    # Should not crash, just skip
 
 
+@patch("src.scheduler.os.path.isdir", return_value=True)
 @patch("src.scheduler.test_mode.process_commit")
 @patch("src.scheduler.get_recent_commits")
 @patch("src.scheduler.sync_repo")
 @patch("src.scheduler.get_branch_head")
-def test_run_test_now(mock_head, mock_sync, mock_recent, mock_process, test_config):
+def test_run_test_now(
+    mock_head, mock_sync, mock_recent, mock_process, mock_isdir, test_config
+):
     mock_sync.return_value = True
     mock_head.return_value = "head_hash"
     mock_recent.return_value = [
@@ -228,12 +243,13 @@ def test_run_test_now(mock_head, mock_sync, mock_recent, mock_process, test_conf
     mock_process.assert_called_once()
 
 
+@patch("src.scheduler.os.path.isdir", return_value=True)
 @patch("src.scheduler.test_mode.process_commit")
 @patch("src.scheduler.get_recent_commits")
 @patch("src.scheduler.sync_repo")
 @patch("src.scheduler.get_branch_head")
 def test_run_test_now_skips_watch_repos(
-    mock_head, mock_sync, mock_recent, mock_process, watch_config
+    mock_head, mock_sync, mock_recent, mock_process, mock_isdir, watch_config
 ):
     scheduler = Scheduler(watch_config)
     scheduler.run_test_now()
@@ -242,10 +258,10 @@ def test_run_test_now_skips_watch_repos(
     mock_process.assert_not_called()
 
 
+@patch("src.scheduler.os.path.isdir", return_value=True)
 @patch("src.scheduler.sync_repo")
-def test_run_test_now_sync_failure(mock_sync, test_config):
+def test_run_test_now_sync_failure(mock_sync, mock_isdir, test_config):
     mock_sync.return_value = False
 
     scheduler = Scheduler(test_config)
     scheduler.run_test_now()
-    # Should not crash

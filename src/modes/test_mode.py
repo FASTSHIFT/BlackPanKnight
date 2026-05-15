@@ -5,22 +5,12 @@ import subprocess
 from typing import Optional
 
 from src.ai.client import LLMClient
+from src.ai.prompts import TEST_TITLE_PROMPT
 from src.config import RepoConfig
 from src.notify.webhook import push_test_result
 from src.repo import CommitInfo
 
 logger = logging.getLogger(__name__)
-
-TEST_TITLE_PROMPT = """根据以下测试结果，生成一句带emoji的通知标题（20字以内）。
-如果测试通过，用轻松愉快的语气（例：'🎉 全绿！今天又是美好的一天'、'✅ 稳如老狗，测试全过'）。
-如果测试失败，用毒舌吐槽的语气点出问题（例：'💥 炸了！某某的提交把测试搞崩了'、'🫠 又挂了，这分支今天不太行'）。
-只输出标题文本，不要其他内容。
-
-测试结果: {status}
-仓库: {repo}
-分支: {branch}
-提交者: {author}
-提交信息: {message}"""
 
 
 def generate_test_title(
@@ -32,10 +22,26 @@ def generate_test_title(
     message: str,
 ) -> str:
     """Generate AI title for test result, or return default."""
+    import random
+
     if not llm_client:
         return ""
 
     status = "通过" if passed else "失败"
+
+    style_hints = [
+        "用网络梗",
+        "用古诗改编",
+        "用歌词改编",
+        "用俗语改编",
+        "用段子风格",
+        "用打工人风格",
+        "用二次元风格",
+        "用体育解说风格",
+        "用美食比喻",
+    ]
+    hint = random.choice(style_hints)
+
     prompt = TEST_TITLE_PROMPT.format(
         status=status,
         repo=repo_name,
@@ -43,6 +49,7 @@ def generate_test_title(
         author=author,
         message=message,
     )
+    prompt += f"\n（本次请{hint}，不要和之前重复）"
 
     try:
         response = llm_client.client.chat.completions.create(

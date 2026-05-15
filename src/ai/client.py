@@ -8,6 +8,8 @@ from typing import Optional
 
 from openai import OpenAI
 
+from src.ai.prompts import WATCH_ANALYSIS_PROMPT
+
 logger = logging.getLogger(__name__)
 
 
@@ -63,38 +65,7 @@ class AnalysisResult:
         return self.scores.total
 
 
-DEFAULT_PROMPT = """你是一个嵌入式系统性能分析专家。请分析以下 Git commit 的代码变更，
-重点关注对系统性能的潜在影响。
-
-请按以下维度分别打分（0-10，0=无影响，10=极高风险）：
-1. lock_sync: 锁/同步原语/原子操作变更
-2. memory: 内存分配模式变化（栈→堆、新增动态分配、内存池调整）
-3. hot_path: 热路径修改（高频调用函数、中断处理、调度器核心路径）
-4. algorithm: 算法复杂度变化（O(n)→O(n²)、循环嵌套增加等）
-5. config: 系统配置变更（时钟频率、DVFS策略、缓存策略、调度参数）
-6. scope: 影响面（修改文件数、跨模块影响、公共头文件变更）
-
-评分原则：
-- 纯注释/日志/打点/文档修改 = 所有维度 0 分
-- 新增 tracepoint/性能监控代码 = 所有维度 0 分（观测不影响被观测）
-- 仅修改测试代码 = 所有维度 0 分
-
-请严格按以下 JSON 格式输出（不要添加其他内容）：
-```json
-{
-  "title": "严格根据scores加权总分(lock_sync*25+memory*20+hot_path*20+algorithm*15+config*10+scope*10)/100选风格，不要自行判断严重程度：结果>=6用标题党风格，可选震惊体/紧急体/反问体/悬念体（例：'🚨 震惊！调度器被重写，性能恐暴跌'、'⚠️ 紧急！spinlock改了你不知道？'、'❓ 内存池大改，谁来为性能买单？'、'💀 这代码合入后，帧率还能撑住吗'、'🔥 刚刚！热路径被动刀，后果不堪设想'）；结果3-5用同事提醒体（例：'👀 兄弟，内存池锁换了，帮忙看看？'、'⚠️ 老哥这个热路径动了，确认下'、'🤨 这位同学改了调度器，建议当面对线'）；结果0-2用诗句体（例：'📝 轻舟已过万重山，config改了一行半'、'🌸 春风不改锁中序，mutex依旧笑东风'、'🍃 闲看庭前花开落，日志加了两三行'）。带emoji，25字以内。",
-  "scores": {
-    "lock_sync": 0,
-    "memory": 0,
-    "hot_path": 0,
-    "algorithm": 0,
-    "config": 0,
-    "scope": 0
-  },
-  "summary": "一段话分析摘要（80字以内）",
-  "detail": "逐文件分析变更影响"
-}
-```"""
+DEFAULT_PROMPT = WATCH_ANALYSIS_PROMPT
 
 
 class LLMClient:
@@ -127,7 +98,7 @@ class LLMClient:
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.1,
+                temperature=0.5,
             )
             return self._parse_response(response.choices[0].message.content)
         except Exception as e:
@@ -142,8 +113,32 @@ class LLMClient:
         diff: str,
         prompt_template: str = "",
     ) -> str:
+        import random
+
         template = prompt_template or DEFAULT_PROMPT
+        # Rotate style hint to ensure title diversity
+        style_hints = [
+            "用网络梗",
+            "用古诗改编",
+            "用歌词改编",
+            "用俗语改编",
+            "用吐槽风格",
+            "用佛系风格",
+            "用打工人风格",
+            "用二次元风格",
+            "用段子风格",
+        ]
+        if not hasattr(self, "_hint_idx"):
+            self._hint_idx = random.randint(0, len(style_hints) - 1)
+        hint = style_hints[self._hint_idx % len(style_hints)]
+        self._hint_idx += 1
+
+        # Random seed breaks AI response caching
+        seed = random.randint(1000, 9999)
+
         return f"""{template}
+
+（本次低风险标题请{hint}，seed={seed}，不要和之前重复）
 
 ---
 Commit: {commit_hash}

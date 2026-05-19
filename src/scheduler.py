@@ -89,16 +89,17 @@ class Scheduler:
             f"[{repo_config.name}/{branch}] {len(commits)} new commit(s) detected"
         )
 
-        for commit in commits:
-            if repo_config.mode == "test":
-                test_mode.process_commit(
-                    repo_config,
-                    commit,
-                    branch,
-                    None,
-                    self.llm_client,
-                )
-            elif repo_config.mode == "watch":
+        if repo_config.mode == "test":
+            # Only test the latest commit (HEAD), skip intermediate ones
+            test_mode.process_commit(
+                repo_config,
+                commits[0],
+                branch,
+                None,
+                self.llm_client,
+            )
+        elif repo_config.mode == "watch":
+            for commit in commits:
                 watch_mode.process_commit(
                     repo_config,
                     self.config.global_config,

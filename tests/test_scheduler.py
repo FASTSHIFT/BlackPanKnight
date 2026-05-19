@@ -265,3 +265,60 @@ def test_run_test_now_sync_failure(mock_sync, mock_isdir, test_config):
 
     scheduler = Scheduler(test_config)
     scheduler.run_test_now()
+
+
+@patch("src.scheduler.os.path.isdir", return_value=True)
+@patch("src.scheduler.test_mode.process_commit")
+@patch("src.scheduler.get_commits_between")
+@patch("src.scheduler.sync_repo")
+@patch("src.scheduler.get_branch_head")
+def test_test_mode_only_tests_latest_commit(
+    mock_head, mock_sync, mock_commits, mock_process, mock_isdir, test_config
+):
+    """Test mode should only run tests on the latest commit, not all."""
+    mock_sync.return_value = True
+    mock_head.return_value = "new_hash"
+    # 3 new commits, most recent first
+    commits = [
+        MagicMock(hash="commit_3_latest", author="c", message="third"),
+        MagicMock(hash="commit_2", author="b", message="second"),
+        MagicMock(hash="commit_1", author="a", message="first"),
+    ]
+    mock_commits.return_value = commits
+    mock_process.return_value = True
+
+    scheduler = Scheduler(test_config)
+    scheduler._last_commit[("Test Runner", "main")] = "old_hash"
+    scheduler.run_once()
+
+    # Should only be called once with the latest commit
+    mock_process.assert_called_once()
+    call_args = mock_process.call_args[0]
+    assert call_args[1].hash == "commit_3_latest"
+
+
+@patch("src.scheduler.os.path.isdir", return_value=True)
+@patch("src.scheduler.watch_mode.process_commit")
+@patch("src.scheduler.get_commits_between")
+@patch("src.scheduler.sync_repo")
+@patch("src.scheduler.get_branch_head")
+def test_watch_mode_processes_all_commits(
+    mock_head, mock_sync, mock_commits, mock_process, mock_isdir, watch_config
+):
+    """Watch mode should process every new commit individually."""
+    mock_sync.return_value = True
+    mock_head.return_value = "new_hash"
+    commits = [
+        MagicMock(hash="commit_3", author="c", message="third"),
+        MagicMock(hash="commit_2", author="b", message="second"),
+        MagicMock(hash="commit_1", author="a", message="first"),
+    ]
+    mock_commits.return_value = commits
+    mock_process.return_value = True
+
+    scheduler = Scheduler(watch_config)
+    scheduler._last_commit[("Test Watch", "main")] = "old_hash"
+    scheduler.run_once()
+
+    # Should be called for each commit
+    assert mock_process.call_count == 3

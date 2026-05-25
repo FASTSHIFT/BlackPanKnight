@@ -58,7 +58,11 @@ def generate_test_title(
             temperature=0.7,
             max_tokens=50,
         )
-        return response.choices[0].message.content.strip().strip('"').strip("'")
+        content = response.choices[0].message.content
+        if not content:
+            logger.warning("AI title generation returned empty content")
+            return ""
+        return content.strip().strip('"').strip("'")
     except Exception as e:
         logger.warning(f"AI title generation failed: {e}")
         return ""

@@ -80,6 +80,37 @@ def sync_repo(path: str, sync_command: str) -> bool:
         return False
 
 
+def checkout_branch(path: str, branch: str, remote: str = "") -> bool:
+    """Force-checkout a branch's head into the working tree.
+
+    Resolves the same way get_branch_head does (remote-prefixed ref first),
+    then does a hard checkout so the working tree matches that ref. This is
+    required before running test scripts, which execute against whatever is
+    physically checked out on disk.
+
+    Returns True on success, False if the ref cannot be resolved/checked out.
+    """
+    # Build candidate refs: explicit remote first, then discovered remotes,
+    # then the bare branch name and local ref.
+    candidates = []
+    if remote:
+        candidates.append(f"{remote}/{branch}")
+
+    remotes_output = run_git(["remote"], cwd=path)
+    remotes = remotes_output.split("\n") if remotes_output else ["origin"]
+    candidates.extend(f"{r}/{branch}" for r in remotes)
+    candidates.extend([branch, f"refs/heads/{branch}"])
+
+    for ref in candidates:
+        if run_git(["rev-parse", "--verify", ref], cwd=path) is None:
+            continue
+        if run_git(["checkout", "-f", ref], cwd=path) is not None:
+            logger.info(f"Checked out {ref} in {path}")
+            return True
+    logger.error(f"Cannot checkout branch {branch} in {path}")
+    return False
+
+
 def get_branch_head(path: str, branch: str) -> Optional[str]:
     """Get the latest commit hash for a branch.
 

@@ -46,11 +46,13 @@ class TestRunTestScript:
 
 
 class TestProcessCommit:
+    @patch("src.modes.test_mode.checkout_branch")
     @patch("src.modes.test_mode.push_test_result")
     @patch("src.modes.test_mode.run_test_script")
-    def test_process_passing(self, mock_run, mock_push):
+    def test_process_passing(self, mock_run, mock_push, mock_checkout):
         mock_run.return_value = 0
         mock_push.return_value = True
+        mock_checkout.return_value = True
 
         repo = RepoConfig(
             name="R",
@@ -70,15 +72,18 @@ class TestProcessCommit:
 
         result = process_commit(repo, commit, "main")
         assert result is True
+        mock_checkout.assert_called_once()
         mock_push.assert_called_once()
         call_kwargs = mock_push.call_args
         assert call_kwargs[1]["passed"] is True
 
+    @patch("src.modes.test_mode.checkout_branch")
     @patch("src.modes.test_mode.push_test_result")
     @patch("src.modes.test_mode.run_test_script")
-    def test_process_failing(self, mock_run, mock_push):
+    def test_process_failing(self, mock_run, mock_push, mock_checkout):
         mock_run.return_value = 1
         mock_push.return_value = True
+        mock_checkout.return_value = True
 
         repo = RepoConfig(
             name="R",
@@ -101,6 +106,66 @@ class TestProcessCommit:
         mock_push.assert_called_once()
         call_kwargs = mock_push.call_args
         assert call_kwargs[1]["passed"] is False
+
+    @patch("src.modes.test_mode.checkout_branch")
+    @patch("src.modes.test_mode.push_test_result")
+    @patch("src.modes.test_mode.run_test_script")
+    def test_process_checkout_failure(self, mock_run, mock_push, mock_checkout):
+        """If checkout fails, must report failure and never run the test."""
+        mock_checkout.return_value = False
+        mock_push.return_value = True
+
+        repo = RepoConfig(
+            name="R",
+            path="/tmp",
+            branches=["dev-graphic"],
+            remote="vela",
+            mode="test",
+            test_script="./t.sh",
+            webhook_url="http://x",
+        )
+        commit = CommitInfo(
+            hash="abc123",
+            author="test",
+            message="fix",
+            date="now",
+            files_changed=[],
+        )
+
+        result = process_commit(repo, commit, "dev-graphic")
+        assert result is False
+        # Test script must NOT run when checkout fails
+        mock_run.assert_not_called()
+        # Failure must still be reported
+        mock_push.assert_called_once()
+        assert mock_push.call_args[1]["passed"] is False
+
+    @patch("src.modes.test_mode.checkout_branch")
+    @patch("src.modes.test_mode.push_test_result")
+    @patch("src.modes.test_mode.run_test_script")
+    def test_process_checks_out_correct_branch(
+        self, mock_run, mock_push, mock_checkout
+    ):
+        """checkout_branch must be called with the branch and remote."""
+        mock_run.return_value = 0
+        mock_push.return_value = True
+        mock_checkout.return_value = True
+
+        repo = RepoConfig(
+            name="R",
+            path="/repo",
+            branches=["dev-graphic"],
+            remote="vela",
+            mode="test",
+            test_script="./t.sh",
+            webhook_url="http://x",
+        )
+        commit = CommitInfo(
+            hash="abc123", author="t", message="m", date="now", files_changed=[]
+        )
+
+        process_commit(repo, commit, "dev-graphic")
+        mock_checkout.assert_called_once_with("/repo", "dev-graphic", "vela")
 
 
 class TestGenerateTestTitle:

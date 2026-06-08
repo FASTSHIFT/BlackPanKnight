@@ -7,6 +7,7 @@ import tempfile
 import pytest
 
 from src.repo import (
+    checkout_branch,
     get_branch_head,
     get_commits_between,
     get_single_commit,
@@ -96,6 +97,43 @@ def test_sync_repo_valid_command(git_repo):
 
 def test_sync_repo_invalid_command(git_repo):
     assert sync_repo(git_repo, "false") is False
+
+
+def test_checkout_branch_switches_working_tree(git_repo):
+    """checkout_branch must actually move the working tree to the target branch."""
+    # Create a second branch with a distinct file, then go back to default.
+    default_branch = run_git(["rev-parse", "--abbrev-ref", "HEAD"], cwd=git_repo)
+    run_git(["checkout", "-b", "feature"], cwd=git_repo)
+    with open(os.path.join(git_repo, "feature.txt"), "w") as f:
+        f.write("feature\n")
+    run_git(["add", "."], cwd=git_repo)
+    run_git(["commit", "-m", "add feature file"], cwd=git_repo)
+
+    # Detach HEAD to simulate the deployed repo's broken state.
+    head = run_git(["rev-parse", default_branch], cwd=git_repo)
+    run_git(["checkout", head], cwd=git_repo)
+    assert run_git(["rev-parse", "--abbrev-ref", "HEAD"], cwd=git_repo) == "HEAD"
+
+    # checkout_branch should bring us onto the feature branch.
+    assert checkout_branch(git_repo, "feature") is True
+    assert os.path.exists(os.path.join(git_repo, "feature.txt"))
+
+
+def test_checkout_branch_nonexistent(git_repo):
+    """checkout_branch returns False for a branch that cannot be resolved."""
+    assert checkout_branch(git_repo, "no-such-branch") is False
+
+
+def test_checkout_branch_discards_local_changes(git_repo):
+    """Force checkout must overwrite dirty working tree changes."""
+    branch = run_git(["rev-parse", "--abbrev-ref", "HEAD"], cwd=git_repo)
+    # Dirty the tracked file.
+    with open(os.path.join(git_repo, "file.txt"), "w") as f:
+        f.write("uncommitted garbage\n")
+    assert checkout_branch(git_repo, branch) is True
+    with open(os.path.join(git_repo, "file.txt")) as f:
+        # Working tree restored to committed content.
+        assert f.read() == "hello world\n"
 
 
 def test_get_single_commit(git_repo):

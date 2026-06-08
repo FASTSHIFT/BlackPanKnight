@@ -8,7 +8,7 @@ from src.ai.client import LLMClient
 from src.ai.prompts import TEST_TITLE_PROMPT
 from src.config import RepoConfig
 from src.notify.webhook import push_test_result
-from src.repo import CommitInfo
+from src.repo import CommitInfo, checkout_branch
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +60,11 @@ def generate_test_title(
         )
         content = response.choices[0].message.content
         if not content:
-            logger.warning("AI title generation returned empty content")
+            logger.warning(
+                f"AI title generation returned empty content "
+                f"(model={llm_client.model}, finish_reason="
+                f"{response.choices[0].finish_reason})"
+            )
             return ""
         return content.strip().strip('"').strip("'")
     except Exception as e:
@@ -92,6 +96,25 @@ def process_commit(
 ) -> bool:
     """Process a single commit in test mode. Returns True if test passed."""
     logger.info(f"[{repo_config.name}] Running tests for {commit.hash[:8]}")
+
+    # Check out the branch so the test runs against the right code, not
+    # whatever happens to be in the working tree (e.g. a detached HEAD).
+    if not checkout_branch(repo_config.path, branch, repo_config.remote):
+        logger.error(
+            f"[{repo_config.name}] Cannot checkout {branch}, reporting failure"
+        )
+        push_test_result(
+            webhook_url=repo_config.webhook_url,
+            repo_name=repo_config.name,
+            branch=branch,
+            passed=False,
+            author=commit.author,
+            commit_hash=commit.hash,
+            commit_message=commit.message,
+            change_id=commit.change_id,
+            title="",
+        )
+        return False
 
     exit_code = run_test_script(repo_config.test_script, repo_config.path)
     passed = exit_code == 0

@@ -36,12 +36,13 @@ def build_test_payload(
     commit_message: str,
     change_id: str = "",
     title: str = "",
+    test_log: str = "",
 ) -> dict:
     """Build payload for test mode results."""
     if not title:
         title = "叮铃铃~ 测试通过!" if "通过" in status else "铛铛铛! 测试失败!"
 
-    return {
+    payload = {
         "标题": title,
         "仓库": repo_name,
         "分支": branch,
@@ -52,6 +53,11 @@ def build_test_payload(
         "提交信息": commit_message,
         "时间": datetime.now().strftime("%Y-%m-%d %H:%M"),
     }
+    # Only attach the log on failure (or whenever the caller bothered to
+    # provide one) so successful payloads stay compact.
+    if test_log:
+        payload["测试日志"] = test_log
+    return payload
 
 
 def build_watch_payload(
@@ -98,6 +104,7 @@ def push_test_result(
     commit_message: str,
     change_id: str = "",
     title: str = "",
+    test_log: str = "",
 ) -> bool:
     """Push a test result to the webhook."""
     status = "✅ 通过" if passed else "❌ 失败"
@@ -110,6 +117,7 @@ def push_test_result(
         commit_message,
         change_id,
         title,
+        test_log,
     )
     return send_webhook(webhook_url, payload)
 

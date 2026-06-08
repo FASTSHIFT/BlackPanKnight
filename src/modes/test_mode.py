@@ -72,19 +72,41 @@ def generate_test_title(
         return ""
 
 
-def run_test_script(script: str, cwd: str) -> int:
-    """Run a test script and return exit code."""
+def run_test_script(script: str, cwd: str) -> tuple:
+    """Run a test script. Returns (exit_code, combined_output).
+
+    stdout and stderr are merged so the order of writes is preserved, and
+    the result is decoded as UTF-8 with replacement so a single bad byte
+    cannot lose the whole log. Output is what we send back for diagnostics
+    when a test fails; never silently dropped.
+    """
     try:
         result = subprocess.run(
-            [script], cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            [script],
+            cwd=cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            errors="replace",
         )
-        return result.returncode
+        return result.returncode, result.stdout or ""
     except FileNotFoundError:
-        logger.error(f"Test script not found: {script}")
-        return 1
+        msg = f"Test script not found: {script}"
+        logger.error(msg)
+        return 1, msg
     except Exception as e:
-        logger.error(f"Test execution error: {e}")
-        return 1
+        msg = f"Test execution error: {e}"
+        logger.error(msg)
+        return 1, msg
+
+
+def _tail(text: str, max_chars: int = 2000) -> str:
+    """Return the last `max_chars` of `text`, with a marker if truncated."""
+    if not text:
+        return ""
+    if len(text) <= max_chars:
+        return text
+    return "...(truncated)...\n" + text[-max_chars:]
 
 
 def process_commit(
@@ -100,9 +122,8 @@ def process_commit(
     # Check out the branch so the test runs against the right code, not
     # whatever happens to be in the working tree (e.g. a detached HEAD).
     if not checkout_branch(repo_config.path, branch, repo_config.remote):
-        logger.error(
-            f"[{repo_config.name}] Cannot checkout {branch}, reporting failure"
-        )
+        msg = f"checkout failed for {repo_config.remote}/{branch}"
+        logger.error(f"[{repo_config.name}] {msg}, reporting failure")
         push_test_result(
             webhook_url=repo_config.webhook_url,
             repo_name=repo_config.name,
@@ -113,11 +134,22 @@ def process_commit(
             commit_message=commit.message,
             change_id=commit.change_id,
             title="",
+            test_log=msg,
         )
         return False
 
-    exit_code = run_test_script(repo_config.test_script, repo_config.path)
+    exit_code, output = run_test_script(repo_config.test_script, repo_config.path)
     passed = exit_code == 0
+
+    # Always log the script tail so failures are diagnosable from the daemon
+    # log alone. On success it stays at debug to keep the log readable.
+    log_tail = _tail(output)
+    if passed:
+        logger.debug(f"[{repo_config.name}] test_script output (tail):\n{log_tail}")
+    else:
+        logger.error(
+            f"[{repo_config.name}] test_script exit={exit_code}, output (tail):\n{log_tail}"
+        )
 
     # Generate AI title
     title = generate_test_title(
@@ -139,5 +171,6 @@ def process_commit(
         commit_message=commit.message,
         change_id=commit.change_id,
         title=title,
+        test_log=log_tail if not passed else "",
     )
     return passed

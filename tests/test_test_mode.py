@@ -36,13 +36,38 @@ def failing_script():
 
 class TestRunTestScript:
     def test_passing_script(self, passing_script):
-        assert run_test_script(passing_script, "/tmp") == 0
+        code, output = run_test_script(passing_script, "/tmp")
+        assert code == 0
+        assert isinstance(output, str)
 
     def test_failing_script(self, failing_script):
-        assert run_test_script(failing_script, "/tmp") == 1
+        code, _ = run_test_script(failing_script, "/tmp")
+        assert code == 1
 
     def test_nonexistent_script(self):
-        assert run_test_script("/nonexistent/script.sh", "/tmp") == 1
+        code, output = run_test_script("/nonexistent/script.sh", "/tmp")
+        assert code == 1
+        assert "not found" in output.lower()
+
+    def test_captures_stdout_and_stderr(self):
+        """Output must include both stdout and stderr writes."""
+        import os
+        import stat
+        import tempfile
+
+        f = tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False)
+        f.write(
+            "#!/bin/bash\n" "echo hello-stdout\n" "echo hello-stderr 1>&2\n" "exit 7\n"
+        )
+        f.close()
+        os.chmod(f.name, os.stat(f.name).st_mode | stat.S_IEXEC)
+        try:
+            code, output = run_test_script(f.name, "/tmp")
+            assert code == 7
+            assert "hello-stdout" in output
+            assert "hello-stderr" in output
+        finally:
+            os.unlink(f.name)
 
 
 class TestProcessCommit:
@@ -50,7 +75,7 @@ class TestProcessCommit:
     @patch("src.modes.test_mode.push_test_result")
     @patch("src.modes.test_mode.run_test_script")
     def test_process_passing(self, mock_run, mock_push, mock_checkout):
-        mock_run.return_value = 0
+        mock_run.return_value = (0, "ok")
         mock_push.return_value = True
         mock_checkout.return_value = True
 
@@ -81,7 +106,7 @@ class TestProcessCommit:
     @patch("src.modes.test_mode.push_test_result")
     @patch("src.modes.test_mode.run_test_script")
     def test_process_failing(self, mock_run, mock_push, mock_checkout):
-        mock_run.return_value = 1
+        mock_run.return_value = (1, "boom: something exploded")
         mock_push.return_value = True
         mock_checkout.return_value = True
 
@@ -106,6 +131,8 @@ class TestProcessCommit:
         mock_push.assert_called_once()
         call_kwargs = mock_push.call_args
         assert call_kwargs[1]["passed"] is False
+        # Failure must carry the script tail so it's diagnosable.
+        assert "boom" in call_kwargs[1]["test_log"]
 
     @patch("src.modes.test_mode.checkout_branch")
     @patch("src.modes.test_mode.push_test_result")
@@ -136,9 +163,11 @@ class TestProcessCommit:
         assert result is False
         # Test script must NOT run when checkout fails
         mock_run.assert_not_called()
-        # Failure must still be reported
+        # Failure must still be reported, with checkout reason in test_log
         mock_push.assert_called_once()
-        assert mock_push.call_args[1]["passed"] is False
+        kwargs = mock_push.call_args[1]
+        assert kwargs["passed"] is False
+        assert "checkout" in kwargs["test_log"].lower()
 
     @patch("src.modes.test_mode.checkout_branch")
     @patch("src.modes.test_mode.push_test_result")
@@ -147,7 +176,7 @@ class TestProcessCommit:
         self, mock_run, mock_push, mock_checkout
     ):
         """checkout_branch must be called with the branch and remote."""
-        mock_run.return_value = 0
+        mock_run.return_value = (0, "")
         mock_push.return_value = True
         mock_checkout.return_value = True
 
@@ -166,6 +195,28 @@ class TestProcessCommit:
 
         process_commit(repo, commit, "dev-graphic")
         mock_checkout.assert_called_once_with("/repo", "dev-graphic", "vela")
+
+
+class TestTail:
+    def test_short_returned_intact(self):
+        from src.modes.test_mode import _tail
+
+        assert _tail("hello", 100) == "hello"
+
+    def test_empty(self):
+        from src.modes.test_mode import _tail
+
+        assert _tail("", 100) == ""
+
+    def test_long_truncated_with_marker(self):
+        from src.modes.test_mode import _tail
+
+        text = "A" * 50 + "\nLAST_LINE\n"
+        out = _tail(text, max_chars=20)
+        assert "truncated" in out
+        assert out.endswith("LAST_LINE\n")
+        # The kept portion is bounded.
+        assert len(out) <= len("...(truncated)...\n") + 20
 
 
 class TestGenerateTestTitle:

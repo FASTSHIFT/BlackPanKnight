@@ -174,3 +174,37 @@ class TestPushFunctions:
         payload = mock_send.call_args[0][1]
         assert payload["状态"] == "❌ 失败"
         assert payload["标题"] == "💥 炸了！"
+
+    @patch("src.notify.webhook.send_webhook")
+    def test_push_test_result_includes_log_on_failure(self, mock_send):
+        """test_log must reach the webhook payload when provided."""
+        mock_send.return_value = True
+        push_test_result(
+            webhook_url="http://x",
+            repo_name="R",
+            branch="main",
+            passed=False,
+            author="dev",
+            commit_hash="abc123def456",
+            commit_message="fix",
+            test_log="gcovr version is 4.2, which is lower than 8.2",
+        )
+        payload = mock_send.call_args[0][1]
+        assert "测试日志" in payload
+        assert "gcovr" in payload["测试日志"]
+
+    @patch("src.notify.webhook.send_webhook")
+    def test_push_test_result_omits_log_on_success(self, mock_send):
+        """Successful payloads stay compact; no 测试日志 field."""
+        mock_send.return_value = True
+        push_test_result(
+            webhook_url="http://x",
+            repo_name="R",
+            branch="main",
+            passed=True,
+            author="dev",
+            commit_hash="abc123def456",
+            commit_message="fix",
+        )
+        payload = mock_send.call_args[0][1]
+        assert "测试日志" not in payload

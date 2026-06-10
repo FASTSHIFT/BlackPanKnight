@@ -105,7 +105,12 @@ def checkout_branch(path: str, branch: str, remote: str = "") -> bool:
         if run_git(["rev-parse", "--verify", ref], cwd=path) is None:
             continue
         if run_git(["checkout", "-f", ref], cwd=path) is not None:
-            logger.info(f"Checked out {ref} in {path}")
+            # Wipe untracked files and dirs (including ignored ones) so test
+            # scripts run against a pristine tree. Stale build artifacts from
+            # a previous branch's run (e.g. generated PNGs) otherwise get
+            # detected by the test and reported as a spurious failure.
+            run_git(["clean", "-xfd"], cwd=path)
+            logger.info(f"Checked out {ref} in {path} (cleaned working tree)")
             return True
     logger.error(f"Cannot checkout branch {branch} in {path}")
     return False

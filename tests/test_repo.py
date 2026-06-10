@@ -136,6 +136,25 @@ def test_checkout_branch_discards_local_changes(git_repo):
         assert f.read() == "hello world\n"
 
 
+def test_checkout_branch_cleans_untracked_files(git_repo):
+    """Checkout must remove untracked artifacts left from a previous run."""
+    branch = run_git(["rev-parse", "--abbrev-ref", "HEAD"], cwd=git_repo)
+    # Simulate stale build artifacts (e.g. generated PNGs) and an ignored dir.
+    artifact = os.path.join(git_repo, "encoder_out.png")
+    with open(artifact, "w") as f:
+        f.write("stale\n")
+    nested = os.path.join(git_repo, "build")
+    os.makedirs(nested, exist_ok=True)
+    with open(os.path.join(nested, "junk.o"), "w") as f:
+        f.write("obj\n")
+
+    assert checkout_branch(git_repo, branch) is True
+    # git clean -xfd must have wiped both.
+    assert not os.path.exists(artifact)
+    assert not os.path.exists(nested)
+    assert run_git(["status", "--porcelain"], cwd=git_repo) == ""
+
+
 def test_get_single_commit(git_repo):
     head = run_git(["rev-parse", "HEAD"], cwd=git_repo)
     commit = get_single_commit(git_repo, head)
